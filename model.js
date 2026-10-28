@@ -10,7 +10,7 @@ export const BUFFER = 15;
 export const money = n => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 export function duration(n) { return [Math.floor(n / 60) ? `${Math.floor(n / 60)} hr` : '', n % 60 ? `${n % 60} min` : ''].filter(Boolean).join(' '); }
 export function time(n) { return `${Math.floor(n / 60) % 12 || 12}:${String(n % 60).padStart(2, '0')} ${n >= 720 ? 'PM' : 'AM'}`; }
-export function dateLabel(date) { return new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); }
+export function dateLabel(date) { return new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/New_York' }); }
 export function defaultDraft() { return { services: ['leaves'], size: 'medium', haul: false, stories: 1, area: 'east', property: '12 Maple Lane (fictional demo address)', date: DEMO_DATES[0], start: null, name: 'Mary Thompson', email: 'mary@example.com', phone: '401-555-0100', notes: 'Please close the side gate when you leave.' }; }
 export function quote(draft) {
   const ids = [...new Set(draft.services)].filter(id => SERVICES[id]);
@@ -23,6 +23,7 @@ export function quote(draft) {
     if (id === 'leaves') { amount = { small: 150, medium: 225, large: 300 }[draft.size] ?? 225; work = { small: 90, medium: 120, large: 165 }[draft.size] ?? 120; details = `${draft.size} yard`; if (draft.haul) { amount += 35; work += 15; details += ' · haul-away included (+$35)'; } }
     if (id === 'mowing') { amount = { small: 40, medium: 55, large: 70 }[draft.size] ?? 55; details = `${draft.size} yard`; }
     if (id === 'gutters') { if (Number(draft.stories) === 2) { amount += 40; work += 30; } details = `${draft.stories} ${Number(draft.stories) === 1 ? 'story' : 'stories'}`; }
+    if (id === 'leaves' && draft.propertyAllowance) { work += 15; details += ' · 15 min property allowance'; }
     minutes += work;
     return { id, name: service.name, amount, details, minutes: work };
   });
@@ -33,19 +34,20 @@ export function quote(draft) {
   const travel = area.miles === null ? 0 : area.miles * 2 * 4;
   return { lines, subtotal, discount, travel, miles: area.miles, total: subtotal + travel - discount, minutes, block: minutes + BUFFER, serviceable: area.miles !== null, assessment: ids.includes('gutters') && Number(draft.stories) >= 3, tools: [...new Set(ids.flatMap(id => SERVICES[id].tools).concat(draft.haul && ids.includes('leaves') ? ['Haul-away trailer'] : []))] };
 }
-export function slots(draft, bookings = [], excludingId = null) {
+export function slots(draft, bookings = [], excludingId = null, blockedDates = []) {
   const q = quote(draft);
-  if (!q.serviceable || q.assessment || !q.lines.length || !DEMO_DATES.includes(draft.date)) return [];
+  if (!q.serviceable || q.assessment || !q.lines.length || !DEMO_DATES.includes(draft.date) || blockedDates.includes(draft.date)) return [];
   const result = [];
-  for (let start = 780; start + q.block <= 1020; start += 30) {
-    if (!bookings.some(b => b.id !== excludingId && b.status !== 'cancelled' && b.draft.date === draft.date && start < b.draft.start + b.block && start + q.block > b.draft.start)) result.push(start);
+  // First departure and the final travel/setup buffer both fit Joe's 1–5 PM workday.
+  for (let start = 780 + BUFFER; start + q.block <= 1020; start += 15) {
+    if (!bookings.some(b => b.id !== excludingId && b.status !== 'cancelled' && [b, ...(b.pendingChange?.status === 'awaiting_customer' ? [{ draft: b.pendingChange.draft, block: quote(b.pendingChange.draft).block }] : [])].some(visit => visit.draft.date === draft.date && start < visit.draft.start + visit.block && start + q.block > visit.draft.start))) result.push(start);
   }
   return result;
 }
-export function validBooking(draft, bookings = [], excludingId = null) {
+export function validBooking(draft, bookings = [], excludingId = null, blockedDates = []) {
   if (!quote(draft).serviceable) return 'This property is outside Joe’s demo service area.';
   if (quote(draft).assessment) return 'Homes with three or more stories need an assessment before booking.';
-  if (!slots(draft, bookings, excludingId).includes(draft.start)) return 'That appointment no longer fits. Please choose an available time.';
+  if (!slots(draft, bookings, excludingId, blockedDates).includes(draft.start)) return 'That appointment no longer fits. Please choose an available time.';
   if (!draft.name.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email) || draft.phone.replace(/\D/g, '').length < 10) return 'Add a name, valid email, and phone number to continue.';
   if (!draft.property.trim()) return 'Add the service address to continue.';
   return '';
