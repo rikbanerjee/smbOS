@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultDraft, quote, slots, validBooking } from '../model.js?v=day-ready-2';
+import { DEMO_DATES, defaultDraft, quote, slots, validBooking } from '../model.js?v=workflows-3';
 import { PROPERTIES, propertyHistory, repeatDraft, packingList, dayPlan, readiness, sampleDay, proposeRainPlan, approveRainPlan, respondToRainChange } from '../operations.js';
 
 test('repeat booking recalls the property and scope but recalculates current pricing', () => {
@@ -107,7 +107,7 @@ test('stale approval and double acceptance are rejected without mutating the inp
 });
 test('full/blocked future calendars produce unresolved proposals rather than overbooking', () => {
   const visits = sampleDay();
-  const plan = proposeRainPlan(visits, visits[0].draft.date, ['2026-11-05', '2026-11-12']);
+  const plan = proposeRainPlan(visits, visits[0].draft.date, DEMO_DATES.slice(1));
   assert.equal(plan.proposals.length, 0);
   assert.equal(plan.unresolved.length, 2);
   assert.throws(() => approveRainPlan(visits, plan), /No proposed changes/);
