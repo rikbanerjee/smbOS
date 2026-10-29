@@ -1,4 +1,4 @@
-import { BUFFER, DEMO_DATES, defaultDraft, quote, slots, validBooking } from './model.js?v=workflows-3';
+import { BUFFER, DEMO_DATES, defaultDraft, quote, slots, validBooking } from './model.js?v=owner-simple-4';
 
 export const DEMO_CLOCK = 780; // Deliberate sample clock: 1 PM on the selected workday.
 export const PROPERTIES = [

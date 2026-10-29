@@ -1,8 +1,8 @@
-import {DEFAULT_RULES,getRules} from './rules.js?v=workflows-3';
-import {createWorkflows,loadPublished,WORK_STORE,RULE_STORE} from './workflow-ui.js?v=workflows-3';
-import { SERVICES, AREAS, DEMO_DATES, BUFFER, money, duration, time, dateLabel, defaultDraft, quote, slots as modelSlots, validBooking as modelValidBooking } from './model.js?v=workflows-3';
-import { PROPERTIES, propertyHistory, repeatDraft, packingList, sampleDay, proposeRainPlan, approveRainPlan, respondToRainChange, readiness } from './operations.js?v=workflows-3';
-import { repeatExperience, providerDay, weatherReview, customerWeatherCard } from './experience.js?v=workflows-3';
+import {DEFAULT_RULES,getRules} from './rules.js?v=owner-simple-4';
+import {createWorkflows,loadPublished,WORK_STORE,RULE_STORE} from './workflow-ui.js?v=owner-simple-4';
+import { SERVICES, AREAS, DEMO_DATES, BUFFER, money, duration, time, dateLabel, defaultDraft, quote, slots as modelSlots, validBooking as modelValidBooking } from './model.js?v=owner-simple-4';
+import { PROPERTIES, propertyHistory, repeatDraft, packingList, sampleDay, proposeRainPlan, approveRainPlan, respondToRainChange, readiness } from './operations.js?v=owner-simple-4';
+import { repeatExperience, providerDay, weatherReview, customerWeatherCard } from './experience.js?v=owner-simple-4';
 
 const paths = {
   car: '<path d="m5 7 2-4h10l2 4m-16 4 2-4h14l2 4v7H3v-7Zm2 7v3m14-3v3M6 12h2m8 0h2"/>',
@@ -39,8 +39,9 @@ let storageAvailable = true;
 let bookings = [];
 try { bookings = JSON.parse(localStorage.getItem(STORE) || '[]').filter(b => b && typeof b.id === 'string' && b.draft && Array.isArray(b.draft.services) && Number.isFinite(b.total) && Number.isFinite(b.block)); } catch { bookings = []; storageAvailable = false; }
 for(const b of bookings) { b.draft.catalogSnapshot ??= structuredClone(DEFAULT_RULES); if(b.pendingChange)b.pendingChange.draft.catalogSnapshot ??= structuredClone(DEFAULT_RULES); }
-const ownerViews=['owner','studio','quotes','jobs','plans'];
-let view = 'home', stage = 0, draft = defaultDraft(), error = '', currentId = null, ownerDate = DEMO_DATES[0], dialog = null;
+const ownerViews=['owner','studio','quotes','jobs','plans','manage'];
+let entryView='home';try{if(sessionStorage.getItem('business-hq-view-mode')==='owner')entryView='owner';}catch{}
+let view = entryView, stage = 0, draft = defaultDraft(), error = '', currentId = null, ownerDate = DEMO_DATES[0], dialog = null;
 let focusMain = false;
 let repeatPropertyId = PROPERTIES[0].id;
 let packed = {}, blockedDates = [];
@@ -55,7 +56,7 @@ const app = document.querySelector('#app');
 const wf=createWorkflows({esc,icon,getBookings:()=>bookings,setBookings:value=>{bookings=value;},getDraft:()=>draft,blocked:()=>blockedDates,persistBookings:()=>persist(),render:()=>render(),navigate:next=>navigate(next),openDialog:d=>openDialog(d),closeDialog:()=>{dialog=null;},error:message=>{error=message;},clearError:()=>{error='';},announce:message=>announce(message),storageError:()=>{storageAvailable=false;},startDraft:(value,step)=>{draft=value;stage=step;currentId=null;navigate('book');}});
 function announce(message) { document.querySelector('#announcement').textContent = message; }
 function persist() { wf.sync(); try { localStorage.setItem(STORE, JSON.stringify(bookings)); } catch { storageAvailable = false; } }
-function navigate(next) { view = next; error = ''; dialog = null; focusMain = true; render(); }
+function navigate(next) { try{sessionStorage.setItem('business-hq-view-mode',ownerViews.includes(next)?'owner':'customer');}catch{} view = next; error = ''; dialog = null; focusMain = true; render(); }
 function startBooking(id = 'leaves', previous = null) {
   draft = previous ? { ...previous, catalogSnapshot:getRules(), extraWork:[], approvedOffer:undefined, services: [...previous.services], date: DEMO_DATES[0], start: null } : { ...defaultDraft(), services: [id] };
   draft.date = firstAvailableDate(); stage = 0; currentId = null; navigate('book');
@@ -63,17 +64,18 @@ function startBooking(id = 'leaves', previous = null) {
 function shell(content) {
   const active = ownerViews.includes(view) ? 'owner' : view === 'bookings' ? 'bookings' : 'home';
   const brand = `<span class="brand-mark">${icon('leaf')}</span><span><strong>Joe’s Landscaping</strong><small>A little care. A better outdoors.</small></span>`;
-  return `<div class="demo-bar"><span class="demo-dot"></span><b>BUSINESS HQ PROTOTYPE</b><span>·</span>Service-to-repeat update · Fictional data · No real payments or messages</div>
-  <div class="shell"><aside class="sidebar"><a class="brand" href="#" data-action="home">${brand}</a>
-  <div><div class="nav-caption">YOUR NEIGHBORHOOD, CARED FOR</div><nav class="nav-group" aria-label="Main navigation">
-  <button class="nav-item ${active === 'home' ? 'active' : ''}" ${active === 'home' ? 'aria-current="page"' : ''} data-action="home">${icon('grid')}<span>Book a service</span></button>
+  return `<div class="demo-bar"><span class="demo-dot"></span><b>BUSINESS HQ PROTOTYPE</b><span>·</span>${active==='owner'?'Owner demo':'Customer demo'} · No real payments or messages</div>
+  <div class="shell ${active==='owner'?'owner-shell':'customer-shell'}"><aside class="sidebar"><a class="brand" href="#" data-action="${active==='owner'?'owner':'home'}">${brand}</a>
+  <div><div class="nav-caption">${active==='owner'?'YOUR BUSINESS':'YOUR NEIGHBORHOOD, CARED FOR'}</div><nav class="nav-group" aria-label="${active==='owner'?'Owner navigation':'Customer navigation'}">
+  ${active==='owner'?wf.primaryNav(view):`  <button class="nav-item ${active === 'home' ? 'active' : ''}" ${active === 'home' ? 'aria-current="page"' : ''} data-action="home">${icon('grid')}<span>Book a service</span></button>
   <button class="nav-item ${active === 'bookings' ? 'active' : ''}" ${active === 'bookings' ? 'aria-current="page"' : ''} data-action="bookings">${icon('calendar')}<span>My bookings</span>${bookings.filter(b => b.status !== 'cancelled').length ? `<span class="pill">${bookings.filter(b => b.status !== 'cancelled').length}</span>` : ''}</button>
   <button class="nav-item ${active === 'owner' ? 'active' : ''}" ${active === 'owner' ? 'aria-current="page"' : ''} data-action="owner">${icon('bag')}<span>Joe’s workspace</span><span class="pill">DEMO</span></button>
-  </nav></div><div class="sidebar-note">${icon('leaf')}<strong>Good work. Less back-and-forth.</strong>Pick your services. Find a time. We’ll take care of the details.</div>
+`}
+  </nav></div><div class="sidebar-note">${icon('leaf')}<strong>${active==='owner'?'Your business, one day at a time.':'Good work. Less back-and-forth.'}</strong>${active==='owner'?'My day has your next job and preparation. My business holds your services and prices.':'Pick your services. Find a time. We’ll take care of the details.'}</div>
   <div class="powered"><span class="bhq">B</span><span>A small business, powered by <b>Business HQ</b></span></div></aside>
-  <div class="workspace"><header class="topbar"><div class="breadcrumb">Joe’s Landscaping <span>/</span><b>${active === 'owner' ? 'Your day, ready to go' : active === 'bookings' ? 'My bookings' : 'Customer experience'}</b></div>
-  <a class="brand mobile-brand" href="#" data-action="home">${brand}</a><div class="top-actions"><span class="status"><i></i>Locally owned. Personally cared for.</span><button class="icon-btn" aria-label="Joe’s contact details" data-action="contact">${icon('phone')}</button><span class="customer-name">${active === 'owner' ? 'Hey, Joe' : 'Hi, Mary'}</span><span class="avatar">${active === 'owner' ? 'J' : 'MT'}</span></div></header>
-  <main id="main" tabindex="-1">${content}<footer class="footer"><span>Joe’s Landscaping · East Providence, RI · Serving neighbors since 2015</span><span>Workflows v3 · Sample dates 2026–2027 · Browser-local data</span></footer></main></div></div>${dialog ? dialogContent() : ''}`;
+  <div class="workspace"><header class="topbar"><div class="breadcrumb">Joe’s Landscaping <span>/</span><b>${active === 'owner' ? ({owner:'My day',jobs:'Jobs & money',quotes:'Quote requests',manage:'My business',studio:'Services & prices',plans:'Repeat customers'}[view]) : active === 'bookings' ? 'My bookings' : 'Customer experience'}</b></div>
+  <a class="brand mobile-brand" href="#" data-action="${active==='owner'?'owner':'home'}">${brand}</a><div class="top-actions"><span class="status"><i></i>Locally owned. Personally cared for.</span><button class="icon-btn" aria-label="Joe’s contact details" data-action="contact">${icon('phone')}</button><span class="customer-name">${active === 'owner' ? 'Hey, Joe' : 'Hi, Mary'}</span><span class="avatar">${active === 'owner' ? 'J' : 'MT'}</span></div></header>
+  <main id="main" tabindex="-1">${content}<footer class="footer"><span>Joe’s Landscaping · East Providence, RI · Serving neighbors since 2015</span><span>Sample dates 2026–2027 · Saved on this device</span></footer></main></div></div>${dialog ? dialogContent() : ''}`;
 }
 function garden() { return `<div class="hero-art" aria-hidden="true"><svg viewBox="0 0 450 260" preserveAspectRatio="xMaxYMax slice"><circle cx="307" cy="83" r="49" fill="#a9bb79" opacity=".22"/><path d="M70 260c-5-103 47-95 84-70 31-76 111-48 122-10 51-90 126-67 174-31v111" fill="#4c7450"/><path d="M134 260c36-47 75-41 115-26 60-54 135-72 201-25v51" fill="#78925d"/><path d="M266 260c25-19 42-48 47-91l4-90 5 90c5 43 21 72 47 91" fill="#9b9766"/><path d="M318 195c-39-9-69-34-70-61 35-1 66 23 70 61m0-44c34-8 56-28 57-52-28 1-52 22-57 52m0-37c-29-5-50-22-53-42 25-3 46 15 53 42m1-33c25-5 42-21 43-39-22-2-39 14-43 39" fill="#c5d39b"/><path d="M208 260v-75m0 40c-30-1-45-18-46-37 25 1 41 14 46 37m0-21c29-2 44-19 43-37-25 4-40 16-43 37" stroke="#a7ba83" stroke-width="5" fill="#a7ba83"/><path d="M385 260v-54m0 26c-24-3-33-15-33-29 18 1 29 10 33 29m0-13c22-5 31-17 30-31-19 4-28 14-30 31" stroke="#c1ce98" stroke-width="4" fill="#c1ce98"/><ellipse cx="97" cy="222" rx="32" ry="12" fill="#7d975e"/><path d="M95 260v-40m-11 10 11 13 12-16" stroke="#bdc990" stroke-width="3" fill="none"/><circle cx="380" cy="49" r="3" fill="#c6d3a0"/><circle cx="194" cy="96" r="2" fill="#c6d3a0"/><path d="m181 57 4-7 4 7-4 7Z" fill="#c6d3a0"/></svg></div>`; }
 function home() {
@@ -86,7 +88,7 @@ function home() {
   <section class="services" aria-label="Available services">${Object.entries(SERVICES).map(([id, service]) => `<button class="service-card" data-action="service" data-id="${id}"><span class="service-icon ${service.icon}">${icon(service.icon)}</span><span><span class="category">${service.category}</span><h3>${service.name}</h3><p>${service.description}</p><span class="service-meta"><b>From ${money(getRules()[id].base)}</b><span>·</span>${duration(getRules()[id].minutes)}</span></span><span class="card-arrow">${icon('arrow')}</span></button>`).join('')}</section>
   <section class="hero compact-promo" aria-label="Seasonal gutter special"><div><div class="eyebrow">OCTOBER VISITS · GUTTERS 10% OFF</div><h2>Fall care, handled.</h2><p>Combine services in one visit, with a single travel charge.</p><button class="btn" data-action="fall-bundle">Build my fall visit ${icon('arrow')}</button></div>${garden()}</section>
   <section class="try-owner"><div><strong>See the other side of a better day.</strong><p>Try two demo visits, a packing list, and a rain-delay decision.</p></div><button class="text-btn" data-action="load-working-day">Try Joe’s working day ${icon('arrow')}</button></section>
-  <section class="wf-tour"><div><span class="eyebrow">NEW · THE WHOLE SERVICE JOURNEY</span><h3>From a good question to the next visit.</h3><p>Configure a service, agree a quote, finish the work, and make returning easy.</p></div><button class="btn secondary small" data-action="wf-nav" data-id="studio">Explore service setup ${icon("arrow")}</button></section><div class="trust-strip"><span>${icon('shield')}A clear total before you book</span><span>${icon('clock')}Appointments that fit the whole visit</span><span>${icon('pin')}East Providence & Riverside</span></div>`;
+  <section class="wf-tour"><div><span class="eyebrow">NEW · THE WHOLE SERVICE JOURNEY</span><h3>From a good question to the next visit.</h3><p>Configure a service, agree a quote, finish the work, and make returning easy.</p></div><button class="btn secondary small" data-action="wf-nav" data-id="manage">Explore My business ${icon("arrow")}</button></section><div class="trust-strip"><span>${icon('shield')}A clear total before you book</span><span>${icon('clock')}Appointments that fit the whole visit</span><span>${icon('pin')}East Providence & Riverside</span></div>`;
 }
 function stepper() { return `<div class="stepper" aria-label="Booking progress">${['Your visit', 'Find a time', 'Review & book'].map((name, i) => `${i ? '<span class="step-line"></span>' : ''}<div class="step ${i === stage ? 'active' : i < stage ? 'done' : ''}" ${i === stage ? 'aria-current="step"' : ''}><b>${i < stage ? '✓' : i + 1}</b>${name}</div>`).join('')}</div>`; }
 function scope() {
@@ -178,7 +180,7 @@ function dialogContent() {
 }
 function render() {
   const focused = document.activeElement?.id;
-  app.innerHTML = shell(`${ownerViews.includes(view)?wf.nav(view):''}${error&&!dialog&&['studio','quotes','jobs','plans','bookings'].includes(view)?`<div class="error" role="alert">${esc(error)}</div>`:''}`+(view === 'home' ? home() : view === 'repeat' ? repeatExperience({ bookings, propertyId: repeatPropertyId, icon, esc }) : view === 'book' ? booking() : view === 'confirmation' ? confirmation() : view === 'owner' ? owner() : ['studio','quotes','jobs','plans'].includes(view)?wf.render(view):myBookings()));
+  app.innerHTML = shell(`${ownerViews.includes(view)?wf.nav(view):''}${error&&!dialog&&['studio','quotes','jobs','plans','manage','bookings'].includes(view)?`<div class="error" role="alert">${esc(error)}</div>`:''}`+(view === 'home' ? home() : view === 'repeat' ? repeatExperience({ bookings, propertyId: repeatPropertyId, icon, esc }) : view === 'book' ? booking() : view === 'confirmation' ? confirmation() : view === 'owner' ? owner() : ['studio','quotes','jobs','plans','manage'].includes(view)?wf.render(view):myBookings()));
   const dates=document.querySelector('.date-options'), selectedDate=dates?.querySelector('.selected');if(dates&&selectedDate)dates.scrollLeft=selectedDate.offsetLeft;
   if (focusMain) { document.querySelector('#main').focus({preventScroll:true}); window.scrollTo({top:0,behavior:'instant'}); focusMain = false; }
   else if (focused) document.getElementById(focused)?.focus({preventScroll:true});
@@ -291,6 +293,7 @@ document.addEventListener('click', async event => {
     Object.assign(b,{draft:next,...quote(next),changeDeclined:false});ownerDate=next.date;persist();dialog=null;error='';render();announce('Demo visit rescheduled.');
   }
 });
+document.addEventListener('toggle',event=>wf.disclosure(event.target),true);
 document.addEventListener('input',event=>{if(['edit','question','answer'].includes(event.target.dataset.wf))wf.change(event.target,false);});
 document.addEventListener('change', event => {
   const el=event.target;

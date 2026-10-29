@@ -1,4 +1,4 @@
-import { DEFAULT_RULES, getRules, effects } from './rules.js?v=workflows-3';
+import { DEFAULT_RULES, getRules, effects } from './rules.js?v=owner-simple-4';
 export const SERVICES = {
   leaves: { name: 'Fall leaf cleanup', category: 'Lawn & yard', icon: 'leaf', description: 'A fresh start for your lawn, beds, and walkways.', base: 150, minutes: 90, tools: ['Leaf blower', 'Rake', 'Leaf bags', 'Gloves'] },
   gutters: { name: 'Gutter cleaning', category: 'Home exterior', icon: 'house', description: 'Clear gutters. Flowing downspouts. Ready for the rain.', base: 120, minutes: 90, tools: ['Ladder', 'Gutter scoop', 'Hose', 'Safety equipment'] },

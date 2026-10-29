@@ -1,5 +1,5 @@
-import {getRules} from './rules.js?v=workflows-3';
-import {quote, slots, validBooking, DEMO_DATES, BUFFER} from './model.js?v=workflows-3';
+import {getRules} from './rules.js?v=owner-simple-4';
+import {quote, slots, validBooking, DEMO_DATES, BUFFER} from './model.js?v=owner-simple-4';
 export const freshWork=()=>({quotes:[],extras:[],invoices:[],plans:[],seasonal:[]});
 export const uid=prefix=>`${prefix}-${crypto.randomUUID().slice(0,8).toUpperCase()}`;
 const clone=x=>structuredClone(x);
