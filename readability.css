@@ -147,3 +147,22 @@ main:has(.home-continue){padding-bottom:130px}
 .step-section .slot{padding:9px 6px;text-align:center}.step-section .slot strong{margin-bottom:0;font-size:15px}.step-section .slot small{font-size:12px;line-height:1.4}
 .step-section .pick-day-note{min-height:96px}
 @media(max-width:620px){.week-picker{margin:10px 0 10px}.step-section .wf-selected-date{margin:8px 0 2px;font-size:14px}.step-section .slots{grid-template-columns:repeat(3,minmax(0,1fr));max-height:152px}.step-section[data-section="time"] .section-toggle{padding-bottom:8px}.step-section[data-section="time"] .timing{margin-top:8px;font-size:13px}.step-section .pick-day-note{min-height:72px}}
+.field label .hint{font-size:inherit;line-height:inherit}
+
+/* Booking confirmation: tighter groups so the whole page fits on one screen */
+main:has(.confirmation){padding-top:14px}main:has(.confirmation) .footer{margin-top:16px}
+.confirmation .success{margin-bottom:12px}.confirmation .success-icon{width:38px;height:38px;margin:0 auto 6px}.confirmation .success-icon svg{width:20px;height:20px}
+.confirmation .success .eyebrow{line-height:1.5}.confirmation .success h1{margin:2px 0 0;font-size:27px;line-height:1.25}.confirmation .success p{margin-top:4px;font-size:15px;line-height:1.5}
+.confirmation .panel{padding:8px 18px 14px;margin-bottom:0}.confirmation .panel+.panel{margin-top:10px}
+.confirmation .review-row{padding:7px 0;line-height:1.4}.confirmation .review-row small{line-height:1.4}.confirmation .review-row svg{margin-top:1px}
+.confirmation .bill-total{margin-top:0;padding:8px 0}.confirmation .bill-total strong{font-size:25px}
+.confirmation .btn-row{margin-top:4px;gap:8px}
+.confirmation .recovery{padding:10px 18px}.confirmation .recovery h3{font-size:16px;line-height:1.35}.confirmation .recovery p{margin-top:2px!important;font-size:14px;line-height:1.45}.confirmation .recovery .text-btn{min-height:36px;padding-block:4px;font-size:14px}
+.confirmation>.text-btn{display:flex;align-items:center;gap:6px;margin:4px auto 0;min-height:36px;padding-block:4px}
+@media(max-width:620px){main:has(.confirmation){padding-top:10px}.confirmation .success-icon{width:32px;height:32px;margin-bottom:4px}.confirmation .success h1{font-size:23px;letter-spacing:-.5px}.confirmation .success p{font-size:14px}.confirmation .panel{padding:4px 14px 12px}.confirmation .recovery{padding:8px 14px}.confirmation .review-row{padding:6px 0}.confirmation .btn-row .btn{min-height:44px;padding:8px 6px;font-size:14px;white-space:nowrap}}
+main:has(.confirmation){padding-bottom:20px}
+.confirmation .review-row{padding:6px 0}.confirmation .btn-row .btn{min-height:44px;padding-block:8px}
+@media(max-height:780px) and (min-width:621px){main:has(.confirmation){padding-top:8px}.confirmation .success{margin-bottom:8px}.confirmation .success-icon{width:30px;height:30px;margin-bottom:2px}.confirmation .success-icon svg{width:16px;height:16px}.confirmation .success h1{font-size:24px}.confirmation .panel{padding-bottom:10px}.confirmation .panel+.panel{margin-top:8px}.confirmation .recovery{padding-block:8px}.confirmation>.text-btn{margin-top:0;min-height:32px}}
+@media(max-width:620px){main:has(.confirmation){padding-bottom:125px}.confirmation .panel+.panel{margin-top:8px}.confirmation>.text-btn{margin-top:0}}
+@media(min-width:621px){.confirmation .success p br{display:none}}
+#announcement{top:0}

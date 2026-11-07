@@ -161,7 +161,9 @@ function sectionState() { if (sectionDraft !== draft) { sectionDraft = draft; se
 function confirmChoices(...ids) { sectionState(); ids.forEach(id => { confirmed[id] = true; }); }
 const req = '<span class="req" aria-hidden="true">*</span>';
 const placeComplete = () => Boolean(draft.property?.trim() && draft.city?.trim() && draft.state?.trim() && quote(draft).serviceable);
-const contactComplete = () => Boolean(draft.name.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email) && draft.phone.replace(/\D/g, '').length >= 10);
+const emailValid = () => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email);
+// Quotes are sent by email, so that panel requires one. A booking only needs a name and phone; any email given must be valid.
+const contactComplete = (id = 'contact') => Boolean(draft.name.trim() && draft.phone.replace(/\D/g, '').length >= 10 && (emailValid() || (id !== 'quote' && !draft.email.trim())));
 // Rule: a panel with one choice finishes when it's tapped; a panel with more than one input finishes with Done.
 // "A few details" always ends with Done: every service adds at least one visit question from the workflow rules.
 const detailsAnswered = () => (!draft.services.some(s => s === 'leaves' || s === 'mowing') || Boolean(confirmed.size)) && (!draft.services.includes('leaves') || Boolean(confirmed.haul)) && (!draft.services.includes('gutters') || Boolean(confirmed.stories))
@@ -175,7 +177,7 @@ function sectionComplete(id) {
   if (id === 'details') return detailsAnswered() && Boolean(confirmed.details);
   if (id === 'time') return Boolean(confirmed.time) && draft.start !== null && slots(draft, bookings).includes(draft.start);
   if (id === 'contact') return Boolean(confirmed.contact && contactComplete());
-  if (id === 'quote') return Boolean(confirmed.quote && contactComplete());
+  if (id === 'quote') return Boolean(confirmed.quote && contactComplete('quote'));
   return false;
 }
 const preselected = '<span class="preselected-tag">Preselected · tap to confirm</span>';
@@ -189,7 +191,7 @@ function doneReady(id) {
   if (id === 'services') return Boolean(confirmed.picked_services) && draft.services.length > 0;
   if (id === 'details') return detailsAnswered();
   if (id === 'time') return draft.start !== null;
-  return contactComplete();
+  return contactComplete(id);
 }
 // What a panel still needs from the customer, top to bottom. Keys match the data-need attributes in its markup.
 function missingItems(id) {
@@ -208,7 +210,9 @@ function missingItems(id) {
     }
     return list;
   }
-  return [!draft.name.trim() && 'name', !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email) && 'email', draft.phone.replace(/\D/g, '').length < 10 && 'phone'].filter(Boolean);
+  const name = !draft.name.trim() && 'name', phone = draft.phone.replace(/\D/g, '').length < 10 && 'phone';
+  if (id === 'quote') return [name, !emailValid() && 'email', phone].filter(Boolean);
+  return [name, phone, draft.email.trim() && !emailValid() && 'email'].filter(Boolean);
 }
 const needEl = key => [...document.querySelectorAll('[data-need]')].find(el => el.dataset.need === key);
 // Runs after every render and while typing, so a highlight clears as soon as its answer is in.
@@ -344,7 +348,7 @@ function scheduling() {
   ${available.length ? `<div class="timing">${icon('shield')}Only slots that fit your whole visit are shown.</div>` : `<div class="notice warning">${icon('clock')}<span>${q.block + BUFFER > 240 ? 'This combination plus travel needs more than Joe’s four-hour work window. Remove a service or request an assessment to split the work.' : 'No time fits your visit on this date. Try another day or adjust your services.'}</span></div>`}`}
   ${draft.start !== null ? `<div class="notice">${icon('check')}<span>Your services: ${time(draft.start)}–${time(draft.start + q.minutes)}.<br>Calendar protected until ${time(draft.start + q.block)} with the buffer.</span></div>` : ''}
   ${draft.services.some(id => FALL_PROMO.rates[id]) && !inFallPromo(draft.date) ? '<div class="notice warning">The fall promotion covers September–November visits. Your total shows regular prices for this date.</div>' : ''}${doneButton('time')}`)}
-  ${section('contact', 'user', 'Who should Joe expect?', esc([draft.name, draft.email, draft.phone].join(' · ')), `<p>Sample details are filled in for Mary. Use fictional information in this demo.</p><div class="fields"><div data-need="name" class="field wide"><label for="name">Name${req}</label><input id="name" required autocomplete="off" data-field="name" value="${esc(draft.name)}" maxlength="80"></div><div data-need="email" class="field"><label for="email">Email${req}</label><input id="email" required autocomplete="off" type="email" data-field="email" value="${esc(draft.email)}" maxlength="120"></div><div data-need="phone" class="field"><label for="phone">Phone${req}</label><input id="phone" required autocomplete="off" type="tel" data-field="phone" value="${esc(draft.phone)}" maxlength="30"></div><div class="field wide"><label for="notes">Anything Joe should know? <span class="hint">Optional</span></label><textarea id="notes" data-field="notes" maxlength="500" placeholder="e.g. I have a dog, but he’s harmless">${esc(draft.notes)}</textarea></div></div>${doneButton('contact')}`)}`;
+  ${section('contact', 'user', 'Who should Joe expect?', esc([draft.name, draft.phone, draft.email].filter(Boolean).join(' · ')), `<p>Sample details are filled in for Mary. Use fictional information in this demo.</p><div class="fields"><div data-need="name" class="field wide"><label for="name">Name${req}</label><input id="name" required autocomplete="off" data-field="name" value="${esc(draft.name)}" maxlength="80"></div><div data-need="phone" class="field"><label for="phone">Phone${req}</label><input id="phone" required autocomplete="off" type="tel" data-field="phone" value="${esc(draft.phone)}" maxlength="30"></div><div data-need="email" class="field"><label for="email">Email <span class="hint">Optional</span></label><input id="email" autocomplete="off" type="email" data-field="email" value="${esc(draft.email)}" maxlength="120"></div><div class="field wide"><label for="notes">Anything Joe should know? <span class="hint">Optional</span></label><textarea id="notes" data-field="notes" maxlength="500" placeholder="e.g. I have a dog, but he’s harmless">${esc(draft.notes)}</textarea></div></div>${doneButton('contact')}`)}`;
 }
 function review() {
   const q = quote(draft);
@@ -352,7 +356,7 @@ function review() {
   <div class="review-row">${icon('pin')}<span><strong>${esc([draft.property, draft.city, draft.state].filter(Boolean).join(', '))}</strong><small>${AREAS[draft.area].name} · ${q.miles} miles from Joe’s business</small></span><button class="text-btn" data-action="edit" data-id="0">Edit</button></div>
   <div class="review-row">${icon('calendar')}<span><strong>${dateLabel(draft.date)} · ${time(draft.start)}</strong><small>Services finish at ${time(draft.start + q.minutes)} · Eastern Time<br>${BUFFER}-minute travel/setup buffer included in the calendar.</small></span><button class="text-btn" data-action="edit" data-id="1">Edit</button></div>
   <div class="review-row">${icon('bag')}<span>${q.lines.map(l => `<strong style="display:block">${l.name}<small>${esc(l.details)} · ${duration(l.minutes)}</small></strong>`).join('')}</span><button class="text-btn" data-action="edit" data-id="0">Edit</button></div>
-  <div class="review-row">${icon('user')}<span><strong>${esc(draft.name)}</strong><small>${esc(draft.email)}<br>${esc(draft.phone)}</small>${draft.notes ? `<small>Note: ${esc(draft.notes)}</small>` : ''}</span><button class="text-btn" data-action="edit" data-id="1">Edit</button></div></section>
+  <div class="review-row">${icon('user')}<span><strong>${esc(draft.name)}</strong><small>${esc(draft.phone)}${draft.email.trim() ? `<br>${esc(draft.email)}` : ''}</small>${draft.notes ? `<small>Note: ${esc(draft.notes)}</small>` : ''}</span><button class="text-btn" data-action="edit" data-id="1">Edit</button></div></section>
   <div class="notice">${icon('shield')}<span><strong>No surprises on arrival.</strong><br>This price covers the scope you selected. Any extra work requires your approval. Tax is assumed $0 in this illustrative demo.</span></div><div class="notice">${icon('calendar')}<span>Manage or reschedule your demo booking from My bookings. Real cancellation and weather policies would be set by Joe before launch.</span></div>`;
 }
 function bill(q, withAction = false) {
@@ -374,7 +378,7 @@ function bookingDetails(b) { return `<div class="review-row">${icon('calendar')}
 function confirmation() {
   const b = bookings.find(b => b.id === currentId);
   if (!b) return myBookings();
-  return `<div class="confirmation"><div class="success"><div class="success-icon">${icon('check')}</div><div class="eyebrow">ONE LESS THING ON YOUR LIST</div><h1>You’re booked. Joe’s ready.</h1><p>Your whole visit is on the calendar.<br>Demo confirmation <strong>${esc(b.id)}</strong></p></div><section class="panel">${bookingDetails(b)}<div class="btn-row"><button class="btn" data-action="bookings">View my bookings ${icon('arrow')}</button><button class="btn secondary" data-action="ics" data-id="${esc(b.id)}">${icon('download')}Add to calendar</button></div></section><section class="panel recovery"><h3>New phone? Keep your booking with you.</h3><p style="margin-top:8px">Create a portable demo link, then open it in another browser. It carries the sample booking; production would use a server-backed secure link.</p><button class="text-btn" data-action="share-booking" data-id="${esc(b.id)}">${icon('link')}Get demo booking link</button></section><button class="text-btn" data-action="owner">See what Joe sees ${icon('arrow')}</button></div>`;
+  return `<div class="confirmation"><div class="success"><div class="success-icon">${icon('check')}</div><div class="eyebrow">ONE LESS THING ON YOUR LIST</div><h1>You’re booked. Joe’s ready.</h1><p>Your whole visit is on the calendar. <br>Demo confirmation <strong>${esc(b.id)}</strong></p></div><section class="panel">${bookingDetails(b)}<div class="btn-row"><button class="btn" data-action="bookings">View my bookings ${icon('arrow')}</button><button class="btn secondary" data-action="ics" data-id="${esc(b.id)}">${icon('download')}Add to calendar</button></div></section><section class="panel recovery"><h3>New phone? Keep your booking with you.</h3><p style="margin-top:8px">Create a portable demo link, then open it in another browser. It carries the sample booking; production would use a server-backed secure link.</p><button class="text-btn" data-action="share-booking" data-id="${esc(b.id)}">${icon('link')}Get demo booking link</button></section><button class="text-btn" data-action="owner">See what Joe sees ${icon('arrow')}</button></div>`;
 }
 function myBookings() {
   return `<div class="intro-row"><div><div class="eyebrow">EVERYTHING, IN ONE LITTLE PLACE</div><h1>Your outdoors, organized.</h1><p>Upcoming visits, easy changes, and a shortcut to next season.</p></div><button class="btn secondary small" data-action="home">${icon('plus')}New visit</button></div>

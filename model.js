@@ -113,7 +113,8 @@ export function validBooking(draft, bookings = [], excludingId = null, blockedDa
   if (!quote(draft).serviceable) return 'This property is outside Joe’s demo service area.';
   if (quote(draft).assessment) return 'Homes with three or more stories need an assessment before booking.';
   if (!slots(draft, bookings, excludingId, blockedDates).includes(draft.start)) return 'That appointment no longer fits. Please choose an available time.';
-  if (!draft.name.trim() || ((!draft.ownerCreated || draft.email.trim()) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email)) || draft.phone.replace(/\D/g, '').length < 10) return 'Add a name, valid email, and phone number to continue.';
+  if (!draft.name.trim() || draft.phone.replace(/\D/g, '').length < 10) return 'Add a name and phone number to continue.';
+  if (draft.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email)) return 'Enter a valid email, or leave it blank.';
   if (!draft.property.trim()) return 'Add the service address to continue.';
   return '';
 }

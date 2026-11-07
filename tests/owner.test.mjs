@@ -30,11 +30,11 @@ test('unconfirmed completion, insufficient materials, and pending approval leave
  assert.throws(()=>f.completeFieldJob(desk,freshWork(),visits,visits[0].id,90,0,false),/Confirm/);
  const work=proposeExtra(freshWork(),visits,visits[0].id,'More leaves',25,0,'');assert.throws(()=>f.completeFieldJob(desk,work,visits,visits[0].id,90,0,true),/approve or decline/);
 });
-test('phone jobs accept missing email, but customer bookings and malformed supplied emails are validated',()=>{
+test('bookings accept a missing email, but malformed supplied emails and missing phones are rejected',()=>{
  const d={...f.newPhoneDraft('2026-11-05'),name:'Test Customer',phone:'4015550199',property:'Test address',start:795};
  const b=f.addPhoneJob([],d,true);assert.equal(b.total,175.5);assert.equal(b.source,'phone');assert.equal(b.draft.email,'');
  assert.throws(()=>f.addPhoneJob([b],d,true),/available time/);assert.throws(()=>f.addPhoneJob([],d,false),/agreed/);
- assert.match(validBooking({...d,ownerCreated:false}),/valid email/);assert.match(validBooking({...d,email:'invalid'}),/valid email/);
+ assert.equal(validBooking({...d,ownerCreated:false}),'');assert.match(validBooking({...d,email:'invalid'}),/valid email/);assert.match(validBooking({...d,ownerCreated:false,phone:''}),/phone number/);
 });
 test('phone jobs obey scope, required questions, blocked days, and complete visit capacity',()=>{
  const d={...f.newPhoneDraft('2026-11-05'),name:'Test Customer',phone:'4015550199',property:'Test address',start:795};
