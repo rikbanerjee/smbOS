@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {weekDates,monthDates,shiftPeriod,periodData} from '../calendar.js';
-import {sampleDay} from '../operations.js?v=combined-10';
+import {sampleDay} from '../operations.js?v=combined-11';
 
 test('weekly dates cross month and daylight-saving boundaries without shifting days',()=>{
  assert.deepEqual(weekDates('2026-11-01'),['2026-10-26','2026-10-27','2026-10-28','2026-10-29','2026-10-30','2026-10-31','2026-11-01']);

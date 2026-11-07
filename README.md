@@ -13,8 +13,17 @@ Derek's November 1 customer-home package is now integrated on top of the landsca
 - New visits receive a snapshot of the current promotion: 15% off leaf cleanup and 10% off gutters for September–November visits, including future years. These are prototype campaign rates, configured in `model.js`. November's medium leaf+gutter bundle is $347.25 including one $48 travel charge; December's is $393.
 - Existing saved bookings retain the earlier October-2026-only gutter policy and their stored agreed totals. Adding $25 to a pre-existing $198 leaf job produces $223. Owner-approved fixed quotes show no separate automatic promotion deductions.
 - New rebookings use the current promotion. Changed service selections, newly changed questions, or missing required answers open scope review before scheduling. Unchanged service selections retain the quick path.
-- Browser-local storage keys are preserved. Asset URLs use `combined-10` so refreshed tabs load a consistent release.
+- Browser-local storage keys are preserved. Asset URLs use `combined-11` so refreshed tabs load a consistent release.
 - Logic and Node rendering/event smoke checks cover both sides. Visual browser verification for this integration was unavailable because local browser use was disabled in Work settings.
+
+## Sectioned customer booking
+
+Derek's booking-flow work from the same November 1 copy, which was not part of the customer zip above. See [the port notes](docs/booking-flow-port.md).
+
+- **Home:** tick one or more service cards, then **Continue** from the bar anchored at the bottom. Category chips filter the cards, and a search box appears once there are seven or more services. **Recently ordered → Book again** keeps its own selection and its fast path for unchanged scope.
+- **Booking steps:** each section stays locked until the one above is complete, then collapses with a green check. Prefilled values are marked **Preselected** and count only once the customer confirms them. Joe's questions with set answers use tap cards and start with none selected. After each selection the page glides to the next required input. Pressing Done or Continue early highlights what is missing in soft yellow and glides back to it, even if the customer has scrolled past. If everything is answered but Done hasn't been tapped, Done is what gets highlighted.
+- **Properties:** choose a saved property, edit it in place, or add a new one with street, city, and state. The travel zone comes from city and state; anywhere Joe doesn't serve is blocked with an explanation. Storage: `business-hq-properties-v1` and `business-hq-property-edits-v1`.
+- **Access:** access text from a customer is now an answer for Joe to confirm, not a confirmation. Changing a saved property's address or access clears its confirmation. The field desk shows **Customer replied** and a **Review access from …** task until Joe saves it.
 
 ## Sharing, readability, and calendar overview
 

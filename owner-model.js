@@ -1,6 +1,6 @@
-import {SERVICES,DEMO_DATES,defaultDraft,quote,slots,validBooking} from './model.js?v=combined-10';
-import {packingList} from './operations.js?v=combined-10';
-import {finishJob,balance} from './workflow-model.js?v=combined-10';
+import {SERVICES,DEMO_DATES,defaultDraft,quote,slots,validBooking} from './model.js?v=combined-11';
+import {packingList} from './operations.js?v=combined-11';
+import {finishJob,balance} from './workflow-model.js?v=combined-11';
 
 export const OWNER_STORE='business-hq-field-desk-v1';
 export const freshDesk=()=>({jobs:{},propertyNotes:{},unavailable:[],stock:{'Leaf bags':24}});
@@ -40,7 +40,7 @@ export function needsAttention(bookings,work,desk,date){
   const tasks=[],waiting=[];
   for(const q of work.quotes.filter(q=>q.status==='requested'))tasks.push({key:q.id,kind:'quote',title:q.draft.name+' needs a quote',detail:q.draft.property,action:'quotes'});
   for(const b of bookings.filter(b=>b.status==='confirmed')){
-    if(!b.draft.accessConfirmed)tasks.push({key:b.id+':access',kind:'access',id:b.id,title:'Confirm access with '+b.draft.name.split(' ')[0],detail:b.draft.property});
+    if(!b.draft.accessConfirmed)tasks.push({key:b.id+':access',kind:'access',id:b.id,title:(b.draft.accessAnswered?'Review access from ':'Confirm access with ')+b.draft.name.split(' ')[0],detail:b.draft.property});
     if(b.changeDeclined)tasks.push({key:b.id+':change',kind:'change',id:b.id,title:b.draft.name+' needs another time',detail:'The proposed appointment was declined.'});
     if(b.pendingChange)waiting.push({key:b.id+':held',id:b.id,title:b.draft.name+' · new appointment',detail:'The original visit stays confirmed while the customer decides.'});
   }

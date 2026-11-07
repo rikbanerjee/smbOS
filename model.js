@@ -1,4 +1,4 @@
-import { DEFAULT_RULES, getRules, effects } from './rules.js?v=combined-10';
+import { DEFAULT_RULES, getRules, effects } from './rules.js?v=combined-11';
 export const SERVICES = {
   leaves: { name: 'Fall leaf cleanup', category: 'Lawn & yard', icon: 'leaf', description: 'A fresh start for your lawn, beds, and walkways.', base: 150, minutes: 90, tools: ['Leaf blower', 'Rake', 'Leaf bags', 'Gloves'] },
   gutters: { name: 'Gutter cleaning', category: 'Home exterior', icon: 'house', description: 'Clear gutters. Flowing downspouts. Ready for the rain.', base: 120, minutes: 90, tools: ['Ladder', 'Gutter scoop', 'Hose', 'Safety equipment'] },
@@ -6,6 +6,12 @@ export const SERVICES = {
   mowing: { name: 'Lawn mowing', category: 'Lawn & yard', icon: 'sun', description: 'A neat cut, clean edges, and a tidy finish.', base: 40, minutes: 45, tools: ['Mower', 'Trimmer', 'Leaf blower'] }
 };
 export const AREAS = { east: { name: 'East Providence', miles: 6 }, riverside: { name: 'Riverside', miles: 8 }, outside: { name: 'Outside the service area', miles: null } };
+// Travel zone for a city and state; anything Joe doesn't serve is 'outside'.
+export function areaForCity(city = '', state = '') {
+  const name = city.trim().toLowerCase(), st = state.trim().toUpperCase();
+  if (st && st !== 'RI') return 'outside';
+  return Object.keys(AREAS).find(id => AREAS[id].miles !== null && AREAS[id].name.toLowerCase() === name) ?? 'outside';
+}
 export const DEMO_DATES = ['2026-10-29','2026-11-05','2026-11-12','2026-11-19','2026-11-26','2026-12-03','2026-12-10','2026-12-17','2027-10-28','2027-11-04'];
 export const BUFFER = 15;
 // Fall seasonal promotion: discount rate per service for visits in September–November.
@@ -51,7 +57,7 @@ export const money = n => new Intl.NumberFormat('en-US', { style: 'currency', cu
 export function duration(n) { return [Math.floor(n / 60) ? `${Math.floor(n / 60)} hr` : '', n % 60 ? `${n % 60} min` : ''].filter(Boolean).join(' '); }
 export function time(n) { return `${Math.floor(n / 60) % 12 || 12}:${String(n % 60).padStart(2, '0')} ${n >= 720 ? 'PM' : 'AM'}`; }
 export function dateLabel(date) { return new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/New_York' }); }
-export function defaultDraft() { return { catalogSnapshot:getRules(), promotionSnapshot:freshPromotion(), answers:{}, services: ['leaves'], size: 'medium', haul: false, stories: 1, area: 'east', property: '12 Maple Lane (fictional demo address)', date: DEMO_DATES[0], start: null, name: 'Mary Thompson', email: 'mary@example.com', phone: '401-555-0100', notes: 'Please close the side gate when you leave.' }; }
+export function defaultDraft() { return { catalogSnapshot:getRules(), promotionSnapshot:freshPromotion(), answers:{}, services: ['leaves'], size: 'medium', haul: false, stories: 1, area: 'east', property: '12 Maple Lane (fictional demo address)', city: 'East Providence', state: 'RI', date: DEMO_DATES[0], start: null, name: 'Mary Thompson', email: 'mary@example.com', phone: '401-555-0100', notes: 'Please close the side gate when you leave.' }; }
 export function quote(draft) {
   const ids = [...new Set(draft.services)].filter(id => SERVICES[id]);
   let minutes = 0;
