@@ -4,7 +4,7 @@ import { SERVICES, BUFFER, DEMO_DATES, defaultDraft, quote, slots, validBooking 
 export const DEMO_CLOCK = 780; // Deliberate sample clock: 1 PM on the selected workday.
 export const PROPERTIES = [
   {
-    id: 'mary-home', customerId: 'mary', label: 'Mary’s home', address: '12 Maple Lane (fictional)', city: 'East Providence', state: 'RI', area: 'east',
+    id: 'mary-home', customerId: 'mary', label: 'Mary’s home', address: '12 Maple Lane (fictional)', city: 'East Providence', state: 'RI', zip: '02914', area: 'east',
     size: 'medium', stories: 1, access: 'Use the side gate. Please close it afterward.',
     parking: 'Left side of the driveway', accessConfirmed: true,
     lastVisit: { date: '2025-11-06', services: ['leaves'], haul: false, minutes: 135, size: 'medium' },
@@ -12,7 +12,7 @@ export const PROPERTIES = [
     propertyAllowance: true,
   },
   {
-    id: 'mary-rental', customerId: 'mary', label: 'Mary’s rental', address: '8 Garden Court (fictional)', city: 'Riverside', state: 'RI', area: 'riverside',
+    id: 'mary-rental', customerId: 'mary', label: 'Mary’s rental', address: '8 Garden Court (fictional)', city: 'Riverside', state: 'RI', zip: '02915', area: 'riverside',
     size: 'small', stories: 1, access: 'Front yard only. Tenant keeps the rear gate locked.',
     parking: 'Street parking outside the front entrance', accessConfirmed: true,
     lastVisit: { date: '2026-09-24', services: ['mowing'], haul: false, minutes: 45, size: 'small' },
@@ -44,7 +44,7 @@ export function repeatDraft(property, bookings = []) {
   return {
     ...defaultDraft(), answers:structuredClone(previous.answers??{}),services: [...previous.services], size: previous.size,
     haul: previous.haul, stories: previous.stories ?? property.stories, area: previous.area ?? property.area,
-    property: previous.property ?? property.address, city: property.city, state: property.state, propertyId: property.id, parking: previous.parking ?? property.parking,
+    property: previous.property ?? property.address, city: property.city, state: property.state, zip: property.zip, propertyId: property.id, parking: previous.parking ?? property.parking,
     access: previous.access ?? property.access, accessConfirmed: previous.accessConfirmed ?? property.accessConfirmed,
     propertyAllowance: property.propertyAllowance, scopeConfirmed: true,
     notes: previous.access ?? property.access,

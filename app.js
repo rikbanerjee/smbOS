@@ -58,12 +58,30 @@ try { addedProperties = JSON.parse(localStorage.getItem(PROPERTY_STORE) || '[]')
 const EDIT_STORE = 'business-hq-property-edits-v1';
 let propertyEdits = {}, editingProperty = null;
 try { propertyEdits = JSON.parse(localStorage.getItem(EDIT_STORE) || '{}') || {}; } catch { propertyEdits = {}; }
-const myProperties = () => [...PROPERTIES, ...addedProperties].filter(p => p.customerId === CUSTOMER_ID).map(p => ({ ...p, ...propertyEdits[p.id] }));
+// People this customer has saved, for billing and "who should Joe expect". The first one is who the app knows them as.
+const PEOPLE_STORE = 'business-hq-people-v1', MARY = { id: 'mary', type: 'person', name: 'Mary Thompson', phone: '401-555-0100', email: 'mary@example.com', company: '', billingStreet: '12 Maple Lane (fictional)', billingCity: 'East Providence', billingState: 'RI', billingZip: '02914', billingAddress: '12 Maple Lane (fictional), East Providence, RI 02914' };
+let people = [];
+try {
+  const saved = localStorage.getItem(PEOPLE_STORE);
+  if (saved !== null) people = JSON.parse(saved).filter(p => p && typeof p.id === 'string' && typeof p.name === 'string');
+  else { // Earlier versions kept no people: recognize anyone who has already booked here. Owner samples and phone jobs don't count.
+    const booked = bookings.filter(b => !b.demoScenario && !b.draft.ownerCreated && b.source !== 'phone' && b.draft.name?.trim());
+    if (booked.some(b => b.draft.email === MARY.email)) people = [MARY];
+    for (const b of booked) if (!people.some(p => p.name === b.draft.name)) people.push({ id: `person-${b.id}`, name: b.draft.name, phone: b.draft.phone ?? '', email: b.draft.email ?? '', company: '', billingAddress: '' });
+  }
+} catch { people = []; }
+function persistPeople() { try { localStorage.setItem(PEOPLE_STORE, JSON.stringify(people)); } catch { storageAvailable = false; } }
+const knownPerson = () => people.find(p => p.type !== 'company') ?? null, isMary = () => people.some(p => p.id === MARY.id), firstName = p => p.name.trim().split(/\s+/)[0];
+function withKnownContact(d) { const p = knownPerson(); return Object.assign(d, { name: p?.name ?? '', email: p?.email ?? '', phone: p?.phone ?? '' }); }
+const myProperties = () => [...PROPERTIES.filter(isMary), ...addedProperties].filter(p => p.customerId === CUSTOMER_ID && !propertyEdits[p.id]?.removed).map(p => ({ ...p, ...propertyEdits[p.id] }));
+const homeProperty = () => myProperties().find(p => PROPERTIES.some(q => q.id === p.id)) ?? null;
+// A billing address Joe can't reach is still a good address, but it isn't somewhere to send him.
+const serviceProperties = () => myProperties().filter(p => !(p.billingOnly && p.area === 'outside'));
 function persistProperties() { try { localStorage.setItem(PROPERTY_STORE, JSON.stringify(addedProperties)); localStorage.setItem(EDIT_STORE, JSON.stringify(propertyEdits)); } catch { storageAvailable = false; } }
 // Fill the draft's address, access and scope details from a saved property, or clear them for a new one.
 function useProperty(d, p) {
-  if (!p) return Object.assign(d, { propertyId: 'new', property: '', city: '', state: 'RI', area: 'outside', access: '', parking: '', notes: '', accessConfirmed: false, propertyAllowance: false });
-  return Object.assign(d, { propertyId: p.id, property: p.address, city: p.city, state: p.state, area: p.area, access: p.access, parking: p.parking, notes: '', stories: p.stories, size: p.size, accessConfirmed: p.accessConfirmed, propertyAllowance: p.propertyAllowance });
+  if (!p) return Object.assign(d, { propertyId: 'new', property: '', city: '', state: 'RI', zip: '', area: 'outside', access: '', parking: '', notes: '', accessConfirmed: false, propertyAllowance: false });
+  return Object.assign(d, { propertyId: p.id, property: p.address, city: p.city, state: p.state, zip: p.zip ?? '', area: p.area, access: p.access, parking: p.parking, notes: '', stories: p.stories, size: p.size, accessConfirmed: p.accessConfirmed, propertyAllowance: p.propertyAllowance });
 }
 try { const saved = JSON.parse(localStorage.getItem('business-hq-operations-v2') || '{}'); packed = saved.packed && typeof saved.packed === 'object' ? saved.packed : {}; blockedDates = Array.isArray(saved.blockedDates) ? saved.blockedDates.filter(d => DEMO_DATES.includes(d)) : []; } catch { /* The demo still works without saved operational state. */ }
 const slots = (d, list = bookings, id = null) => modelSlots(d, list, id, blockedDates);
@@ -80,8 +98,8 @@ function announce(message) { document.querySelector('#announcement').textContent
 function persist() { wf.sync(); try { localStorage.setItem(STORE, JSON.stringify(bookings)); } catch { storageAvailable = false; } }
 function navigate(next,mode='day') { if(next==='owner'){calendarMode=mode;if(mode==='day'&&!DEMO_DATES.includes(ownerDate))ownerDate=DEMO_DATES.find(d=>d.slice(0,7)===ownerDate.slice(0,7))||DEMO_DATES.find(d=>d>=ownerDate)||DEMO_DATES.at(-1);}const url=new URL(location.href);if(url.searchParams.has('view')){url.searchParams.delete('view');history.replaceState(null,'',url);}try{sessionStorage.setItem('business-hq-view-mode',ownerViews.includes(next)?'owner':'customer');}catch{} view = next; error = ''; dialog = null; focusMain = true; render(); }
 function startBooking(id = 'leaves', previous = null) {
-  draft = previous ? { ...previous, catalogSnapshot:getRules(), promotionSnapshot:freshPromotion(), extraWork:[], approvedOffer:undefined, services: [...previous.services], date: DEMO_DATES[0], start: null } : useProperty({ ...defaultDraft(), services: [id] }, myProperties()[0]);
-  draft.date = firstAvailableDate(); stage = 0; currentId = null; navigate('book');
+  draft = previous ? { ...previous, catalogSnapshot:getRules(), promotionSnapshot:freshPromotion(), extraWork:[], approvedOffer:undefined, services: [...previous.services], date: DEMO_DATES[0], start: null } : useProperty({ ...defaultDraft(), services: [id] }, serviceProperties()[0]);
+  withKnownContact(draft); draft.billing = undefined; draft.expectedId = undefined; draft.date = firstAvailableDate(); stage = 0; currentId = null; navigate('book');
 }
 function shell(content) {
   const active = ownerViews.includes(view) ? 'owner' : view === 'bookings' ? 'bookings' : 'home';
@@ -111,18 +129,18 @@ const promoBadge = (id, promoNow) => promoNow && FALL_PROMO.rates[id] ? ` <span 
 function recentOrders(property, previous, promoNow) {
   const recent = recentServices(property, bookings), picked = recentPick ?? previous.services;
   const ordered = date => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
-  return `<section class="recent-orders" aria-labelledby="recent-title"><div class="recent-head"><div><div class="eyebrow">WELCOME BACK, MARY</div><h2 id="recent-title">Recently ordered</h2><p class="hint">${esc(property.label)} · details remembered</p></div></div>
+  return `<section class="recent-orders" aria-labelledby="recent-title"><div class="recent-head"><div><div class="eyebrow">WELCOME BACK, ${esc(firstName(MARY).toUpperCase())}</div><h2 id="recent-title">Recently ordered</h2><p class="hint">${esc(property.label)} · details remembered</p></div></div>
   <div class="recent-list">${recent.map(({ id, date }) => `<label class="addon recent-row ${picked.includes(id) ? 'selected' : ''}" for="recent-${id}"><span class="service-icon ${SERVICES[id].icon}">${icon(SERVICES[id].icon)}</span><span><h3>${SERVICES[id].name}${promoBadge(id, promoNow)}</h3><p class="service-meta">${fromPrice(id, promoNow)}</p><small class="recent-date">Last ordered ${ordered(date)}</small></span><input type="checkbox" id="recent-${id}" data-recent="${id}"${checked(picked.includes(id))}></label>`).join('')}</div>
   <div class="recent-foot"><span class="hint">${picked.length ? `${picked.length} selected` : 'Select services to book again'}</span><button class="btn" data-action="rebook-selected"${picked.length ? '' : ' disabled'}>Book again ${icon('arrow')}</button></div></section>`;
 }
 function home() {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }), promoNow = inFallPromo(today);
-  const property = PROPERTIES[0], previous = propertyHistory(property, bookings);
+  const property = homeProperty() ?? PROPERTIES[0], previous = propertyHistory(property, bookings);
   const pending = bookings.filter(b => b.pendingChange?.status === 'awaiting_customer').length;
   return `${promoNow ? `<section class="hero compact-promo" aria-label="Fall seasonal promotions"><div><div class="eyebrow">FALL SEASONAL PROMOTIONS<span class="promo-ends"> · Ends ${fallPromoEnds(today)}</span></div><h2>Fall care, handled.</h2><ul class="promo-list">${Object.entries(FALL_PROMO.rates).map(([id, rate]) => `<li><b>${Math.round(rate * 100)}% off</b> ${SERVICES[id].name.replace(/^Fall l/, 'L').toLowerCase()}</li>`).join('')}</ul><button class="btn" data-action="fall-bundle">Build my fall visit ${icon('arrow')}</button></div>${garden()}</section>` : ''}
-  <div class="intro-row"><div><h1 class="home-greeting">Hi Mary, how can we help today?</h1><p>Whatever your yard needs this season, we’re here to help. Pick a service and a time, and we’ll take care of the rest.</p></div>${hoursButton('tag hours-tag','home-hours',icon('clock'))}</div>
+  <div class="intro-row"><div><h1 class="home-greeting">Hi${knownPerson() ? ` ${esc(firstName(knownPerson()))}` : ''}, how can we help today?</h1><p>Whatever your yard needs this season, we’re here to help. Pick a service and a time, and we’ll take care of the rest.</p><button class="text-btn identity-switch" data-action="${knownPerson() ? 'new-customer' : 'demo-returning'}">${knownPerson() ? `Not ${esc(firstName(knownPerson()))}? Start as a new customer` : 'Demo: continue as returning customer Mary'}</button></div>${hoursButton('tag hours-tag','home-hours',icon('clock'))}</div>
   ${pending ? `<div class="notice warning">${icon('rain')}<span>${pending} demo weather update${pending === 1 ? '' : 's'} waiting for a customer answer.</span><button class="text-btn" data-action="bookings">Review changes ${icon('arrow')}</button></div>` : ''}
-  ${recentOrders(property, previous, promoNow)}
+  ${homeProperty() ? recentOrders(property, previous, promoNow) : ''}
   <div class="section-heading"><div><h2>Services we offer</h2><p>Choose a service and see the full price before you book.</p></div><span>${Object.keys(SERVICES).length} services · One easy visit</span></div>
   ${serviceFilters()}
   <section class="services" aria-label="Available services">${Object.entries(SERVICES).map(([id, service]) => `<label class="service-card${homePick.includes(id) ? ' picked' : ''}" data-id="${id}" data-category="${esc(service.category)}" data-search="${esc(`${service.name} ${service.category} ${service.description}`.toLowerCase())}"${serviceShown(id) ? '' : ' hidden'}><span class="service-icon ${service.icon}">${icon(service.icon)}</span><span><span class="category">${service.category}</span><h3>${service.name}${promoBadge(id, promoNow)}</h3><p>${service.description}</p><span class="service-meta">${fromPrice(id, promoNow)}<span>·</span>${duration(getRules()[id].minutes)}</span></span><input type="checkbox" class="service-pick" data-home-pick="${id}" aria-label="Select ${esc(service.name)}"${checked(homePick.includes(id))}></label>`).join('')}</section><p class="services-empty"${Object.keys(SERVICES).some(serviceShown) ? ' hidden' : ''}>No services match. <button class="text-btn" data-action="service-filter" data-id="all">Show all services</button></p>
@@ -176,13 +194,14 @@ function sectionComplete(id) {
   if (id === 'services') return Boolean(confirmed.services && draft.services.length);
   if (id === 'details') return detailsAnswered() && Boolean(confirmed.details);
   if (id === 'time') return Boolean(confirmed.time) && draft.start !== null && slots(draft, bookings).includes(draft.start);
-  if (id === 'contact') return Boolean(confirmed.contact && contactComplete());
+  if (id === 'billing') return Boolean(confirmed.billing && doneReady('billing'));
+  if (id === 'contact') return Boolean(confirmed.contact && doneReady('contact'));
   if (id === 'quote') return Boolean(confirmed.quote && contactComplete('quote'));
   return false;
 }
 const preselected = '<span class="preselected-tag">Preselected · tap to confirm</span>';
 // Panels open in order: each stays locked until every panel above it in this step is complete.
-const SECTION_ORDER = [['place', 'services', 'details', 'quote'], ['time', 'contact']];
+const SECTION_ORDER = [['place', 'services', 'details', 'quote'], ['time', 'billing', 'contact']];
 const missingText = ready => ready ? 'All answered. Tap Done to continue.' : 'Finish the highlighted items to continue.';
 const doneButton = id => { const ready = doneReady(id); return `${showMissing[id] ? `<p class="section-missing" role="status">${missingText(ready)}</p>` : ''}<button class="btn small section-done${ready ? '' : ' incomplete'}" data-action="section-done" data-id="${id}">Done ${icon('check')}</button>`; };
 // A panel's Done stays pressable: pressing it early highlights what is still needed instead of doing nothing.
@@ -191,6 +210,8 @@ function doneReady(id) {
   if (id === 'services') return Boolean(confirmed.picked_services) && draft.services.length > 0;
   if (id === 'details') return detailsAnswered();
   if (id === 'time') return draft.start !== null;
+  if (id === 'billing') return Boolean(draft.billing?.person && draft.billing?.address);
+  if (id === 'contact' && (!expectedId() || expectedId() === 'new')) return false;
   return contactComplete(id);
 }
 // What a panel still needs from the customer, top to bottom. Keys match the data-need attributes in its markup.
@@ -210,6 +231,8 @@ function missingItems(id) {
     }
     return list;
   }
+  if (id === 'billing') return [!draft.billing?.person && 'bill-person', !draft.billing?.address && 'bill-address'].filter(Boolean);
+  if (id === 'contact' && (!expectedId() || expectedId() === 'new')) return ['expect-person'];
   const name = !draft.name.trim() && 'name', phone = draft.phone.replace(/\D/g, '').length < 10 && 'phone';
   if (id === 'quote') return [name, !emailValid() && 'email', phone].filter(Boolean);
   return [name, phone, draft.email.trim() && !emailValid() && 'email'].filter(Boolean);
@@ -318,9 +341,9 @@ function propertyEditor(p) {
 function scope() {
   if(draft.approvedOffer)return `<section class="panel"><div class="eyebrow">OWNER-APPROVED SCOPE</div><h2>${draft.services.map(id=>esc(SERVICES[id].name)).join(' + ')}</h2><p>${esc(draft.property)}</p><div class="notice">${esc(draft.approvedOffer.note)}</div><p>Your accepted quote fixes this scope and includes travel. Choose a date and time next.</p></section>`;
   const hasYard = draft.services.some(id => id === 'leaves' || id === 'mowing');
-  const props = myProperties(), q = quote(draft), area = AREAS[draft.area] ?? AREAS.outside;
+  const props = serviceProperties(), q = quote(draft), area = AREAS[draft.area] ?? AREAS.outside;
   sectionState();
-  const option = (id, title, detail, iconName, note = '') => { const on = draft.propertyId === id, pre = on && !confirmed.picked; return `<label class="addon property-option ${on ? pre ? 'preselected' : 'selected' : ''}" for="property-${id}"><span class="service-icon">${icon(iconName)}</span><span><h3>${title}</h3><p>${detail}</p>${note ? `<small class="property-access-note"><b>Access:</b> ${note}</small>` : ''}${pre ? preselected : ''}${id !== 'new' ? `<button class="text-btn property-edit" data-action="edit-property" data-id="${id}">Edit</button>` : ''}</span><input type="radio" name="property-pick" id="property-${id}" data-action="pick-property" data-id="${id}"${checked(on && !pre)}></label>`; };
+  const option = (id, title, detail, iconName, note = '') => { const on = draft.propertyId === id, pre = on && !confirmed.picked; return `<label class="addon property-option ${on ? pre ? 'preselected' : 'selected' : ''}" for="property-${id}"><span class="service-icon">${icon(iconName)}</span><span><h3>${title}</h3><p>${detail}</p>${note ? `<small class="property-access-note"><b>Access:</b> ${note}</small>` : ''}${pre ? preselected : ''}${id !== 'new' ? cardActions('property', id, title, 'edit-property') : ''}</span><input type="radio" name="property-pick" id="property-${id}" data-action="pick-property" data-id="${id}"${checked(on && !pre)}></label>`; };
   const picked = props.find(p => p.id === draft.propertyId);
   const placeSummary = esc([picked?.label ?? draft.property, draft.city, q.serviceable ? `${area.miles} miles from Joe` : ''].filter(Boolean).join(' · '));
   const servicesSummary = draft.services.map(id => esc(SERVICES[id].name)).join(' + ');
@@ -339,6 +362,53 @@ function scope() {
   ${doneButton('details')}`)}
 ${(quote(draft).assessment||quote(draft).minutes+30>240)?section('quote', 'user', 'Where should Joe send the quote?', esc([draft.name, draft.email, draft.phone].join(' · ')), `<p>Fictional details only. No real message is sent.</p><div class="fields"><div data-need="name" class="field wide"><label for="quote-name">Name${req}</label><input id="quote-name" data-field="name" value="${esc(draft.name)}" maxlength="80" required autocomplete="off"></div><div data-need="email" class="field"><label for="quote-email">Email${req}</label><input id="quote-email" type="email" data-field="email" value="${esc(draft.email)}" maxlength="120" required autocomplete="off"></div><div data-need="phone" class="field"><label for="quote-phone">Phone${req}</label><input id="quote-phone" type="tel" data-field="phone" value="${esc(draft.phone)}" maxlength="30" required autocomplete="off"></div></div>${doneButton('quote')}`):''}`;
 }
+// Pick cards for saved people and addresses. Saved choices stay available for future bookings.
+const personDetail = p => esc([p.type === 'company' ? 'Company' : p.company, p.phone, p.email].filter(Boolean).join(' · '));
+const addressText = a => [a.address, a.city, [a.state, a.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+const serviceAddress = () => addressText({ address: draft.property, city: draft.city, state: draft.state, zip: draft.zip });
+let removing = null;
+const cardActions = (kind, id, label, editAction) => removing === `${kind}:${id}`
+  ? `<span class="card-actions card-confirm"><span>Remove ${label}?</span><button class="text-btn" id="confirm-remove" data-action="confirm-remove" data-id="${kind}:${id}">Remove</button><button class="text-btn" data-action="cancel-remove">Keep</button></span>`
+  : `<span class="card-actions"><button class="text-btn" data-action="${editAction}" data-id="${id}">Edit</button><button class="text-btn" data-action="ask-remove" data-id="${kind}:${id}">Remove</button></span>`;
+const pickCard = (group, action, id, iconName, title, detail, on, extra = '') => `<label class="addon property-option ${on ? 'selected' : ''}" for="${group}-${id}"><span class="service-icon">${icon(iconName)}</span><span><h3>${title}</h3>${detail ? `<p>${detail}</p>` : ''}${extra}</span><input type="radio" name="${group}" id="${group}-${id}" data-action="${action}" data-id="${id}"${checked(on)}></label>`;
+let personForm = null, addressForm = null;
+const newPerson = target => ({ target, type: 'person', name: '', phone: '', email: '', billingStreet: '', billingCity: '', billingState: 'RI', billingZip: '' });
+const validEmail = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v ?? ''), validPhone = v => (v ?? '').replace(/\D/g, '').length >= 10, validZip = v => /^\d{5}(-\d{4})?$/.test((v ?? '').trim());
+// Anyone billed needs complete details. Someone Joe only expects needs a name and phone; an email is optional.
+const billable = f => Boolean(f.name?.trim() && validPhone(f.phone) && validEmail(f.email) && f.billingStreet?.trim() && f.billingCity?.trim() && f.billingState?.trim() && validZip(f.billingZip));
+const personReady = f => f.target === 'bill' ? billable(f) : Boolean(f.name.trim() && validPhone(f.phone) && (!f.email.trim() || validEmail(f.email)));
+const addressReady = f => Boolean(f.address.trim() && f.city.trim() && f.state.trim() && validZip(f.zip));
+function personEditor() {
+  const f = personForm, bill = f.target === 'bill', company = bill && f.type === 'company', title = f.editId ? `Edit ${esc(f.original)}` : bill ? 'New person or company' : 'New person';
+  const field = (key, label, required, type, cls = '', extra = '') => `<div class="field${cls}"><label for="person-${key}">${label}${required ? req : ' <span class="hint">Optional</span>'}</label><input id="person-${key}" type="${type}" data-person-field="${key}" value="${esc(f[key])}" maxlength="120" autocomplete="off" ${extra}></div>`;
+  const typeChoice = (id, label) => `<button class="choice ${f.type === id ? 'selected' : ''}" aria-pressed="${f.type === id}" data-action="person-type" data-id="${id}"><strong>${label}</strong></button>`;
+  return `<div class="property-editor" role="group" aria-label="${title}"><h4>${title}</h4>${bill ? `<div class="choice-row" role="group" aria-label="Bill a person or a company">${typeChoice('person', 'Person')}${typeChoice('company', 'Company')}</div>` : ''}<div class="fields">${field('name', company ? 'Company name' : 'Name', true, 'text', ' wide')}${field('phone', 'Phone', true, 'tel')}${field('email', 'Email', bill, 'email')}${bill ? `${field('billingStreet', 'Billing street address', true, 'text', ' wide')}${field('billingCity', 'City', true, 'text', ' wide')}${field('billingState', 'State', true, 'text', '', 'maxlength="2" style="text-transform:uppercase"')}${field('billingZip', 'ZIP code', true, 'text', '', 'inputmode="numeric" maxlength="10"')}` : ''}</div><div class="btn-row"><button class="btn small" data-action="save-person"${personReady(f) ? '' : ' disabled'}>${f.editId ? 'Save changes' : 'Save'}</button><button class="text-btn" data-action="cancel-person">Cancel</button></div></div>`;
+}
+function addressEditor() {
+  const f = addressForm, field = (key, label, cls, extra = '') => `<div class="field${cls}"><label for="address-${key}">${label}${req}</label><input id="address-${key}" data-address-field="${key}" value="${esc(f[key])}" autocomplete="off" ${extra}></div>`;
+  return `<div class="property-editor" role="group" aria-label="${f.editId ? 'Edit address' : 'New billing address'}"><h4>${f.editId ? 'Edit address' : 'New billing address'}</h4><div class="fields">${field('address', 'Street address', ' wide', 'maxlength="80"')}${field('city', 'City', ' wide', 'maxlength="40"')}${field('state', 'State', '', 'maxlength="2" style="text-transform:uppercase"')}${field('zip', 'ZIP code', '', 'inputmode="numeric" maxlength="10"')}</div><div class="btn-row"><button class="btn small" data-action="save-address"${addressReady(f) ? '' : ' disabled'}>${f.editId ? 'Save changes' : 'Save address'}</button><button class="text-btn" data-action="cancel-address">Cancel</button></div></div>`;
+}
+function billingSection() {
+  const b = draft.billing ?? {}, person = b.person, service = serviceAddress(), others = myProperties().filter(p => p.id !== draft.propertyId && addressText(p) !== service);
+  const summary = person && b.address ? esc([person.name, person.company, b.address].filter(Boolean).join(' · ')) : '';
+  return section('billing', 'receipt', 'Where should the invoice go?', summary, `<p>Joe sends the invoice after the work is done. Anyone you add here is saved for next time.</p>
+  <span class="label" id="bill-person-label">Who should we bill?${req}</span><div class="property-picker" data-need="bill-person" role="radiogroup" aria-labelledby="bill-person-label">${[...people.map(p => pickCard('bill-person', 'bill-person', p.id, 'user', esc(p.name), personDetail(p), person?.id === p.id, cardActions('person', p.id, esc(p.name), 'edit-bill-person'))), pickCard('bill-person', 'bill-person', 'new', 'plus', 'Add a person or company', 'We’ll save them for next time', personForm?.target === 'bill' && !personForm.editId)].join('')}</div>
+  ${personForm?.target === 'bill' ? personEditor() : ''}
+  <span class="label billing-address-label" id="bill-address-label">Billing address${req}</span><div class="property-picker" data-need="bill-address" role="radiogroup" aria-labelledby="bill-address-label">${[pickCard('bill-address', 'bill-address', 'service', 'pin', 'Same as the service address', esc(service), b.addressId === 'service'), ...(person && b.personBillingAddress ? [pickCard('bill-address', 'bill-address', 'person', 'user', `On file for ${esc(person.name)}`, esc(b.personBillingAddress), b.addressId === 'person')] : []), ...others.map(p => pickCard('bill-address', 'bill-address', p.id, 'house', esc(p.label), esc(addressText(p)), b.addressId === p.id, cardActions('address', p.id, esc(p.label), 'edit-address'))), pickCard('bill-address', 'bill-address', 'new', 'plus', 'Add a new address', 'We’ll save it for next time', Boolean(addressForm))].join('')}</div>
+  ${addressForm ? addressEditor() : ''}${doneButton('billing')}`);
+}
+const billedPerson = p => ({ id: p.id, type: p.type ?? 'person', name: p.name, company: p.company ?? '', phone: p.phone ?? '', email: p.email ?? '' });
+const expectedId = () => draft.expectedId ?? (draft.billing?.person && draft.billing.person.type !== 'company' ? 'billed' : null);
+function syncExpected() { const id = expectedId(), p = id === 'billed' ? draft.billing?.person : people.find(x => x.id === id); if (p && p.type !== 'company') Object.assign(draft, { name: p.name, phone: p.phone, email: p.email ?? '' }); }
+// Billing someone defaults to the address on file for them. A company can't be who Joe expects, so that choice is reset.
+function setBilled(p) {
+  const b = draft.billing ?? {}, keep = b.addressId && b.addressId !== 'person';
+  if (p.type === 'company' && (!draft.expectedId || draft.expectedId === 'billed' || draft.expectedId === p.id)) { draft.expectedId = undefined; confirmed.contact = false; }
+  if (draft.expectedId === p.id) draft.expectedId = 'billed';
+  draft.billing = { ...b, person: billedPerson(p), personBillingAddress: p.billingAddress ?? '', addressId: keep ? b.addressId : 'person', address: keep ? b.address : p.billingAddress };
+  syncExpected();
+}
+const editPersonForm = (p, target) => ({ target, editId: p.id, original: p.name, type: p.type ?? 'person', name: p.name, phone: p.phone ?? '', email: p.email ?? '', billingStreet: p.billingStreet ?? p.billingAddress ?? '', billingCity: p.billingCity ?? '', billingState: p.billingState ?? 'RI', billingZip: p.billingZip ?? '' });
 function scheduling() {
   const q = quote(draft), available = slots(draft, bookings);
   const timeDone = sectionComplete('time');
@@ -348,7 +418,11 @@ function scheduling() {
   ${available.length ? `<div class="timing">${icon('shield')}Only slots that fit your whole visit are shown.</div>` : `<div class="notice warning">${icon('clock')}<span>${q.block + BUFFER > 240 ? 'This combination plus travel needs more than Joe’s four-hour work window. Remove a service or request an assessment to split the work.' : 'No time fits your visit on this date. Try another day or adjust your services.'}</span></div>`}`}
   ${draft.start !== null ? `<div class="notice">${icon('check')}<span>Your services: ${time(draft.start)}–${time(draft.start + q.minutes)}.<br>Calendar protected until ${time(draft.start + q.block)} with the buffer.</span></div>` : ''}
   ${draft.services.some(id => FALL_PROMO.rates[id]) && !inFallPromo(draft.date) ? '<div class="notice warning">The fall promotion covers September–November visits. Your total shows regular prices for this date.</div>' : ''}${doneButton('time')}`)}
-  ${section('contact', 'user', 'Who should Joe expect?', esc([draft.name, draft.phone, draft.email].filter(Boolean).join(' · ')), `<p>Sample details are filled in for Mary. Use fictional information in this demo.</p><div class="fields"><div data-need="name" class="field wide"><label for="name">Name${req}</label><input id="name" required autocomplete="off" data-field="name" value="${esc(draft.name)}" maxlength="80"></div><div data-need="phone" class="field"><label for="phone">Phone${req}</label><input id="phone" required autocomplete="off" type="tel" data-field="phone" value="${esc(draft.phone)}" maxlength="30"></div><div data-need="email" class="field"><label for="email">Email <span class="hint">Optional</span></label><input id="email" autocomplete="off" type="email" data-field="email" value="${esc(draft.email)}" maxlength="120"></div><div class="field wide"><label for="notes">Anything Joe should know? <span class="hint">Optional</span></label><textarea id="notes" data-field="notes" maxlength="500" placeholder="e.g. I have a dog, but he’s harmless">${esc(draft.notes)}</textarea></div></div>${doneButton('contact')}`)}`;
+  ${billingSection()}
+  ${section('contact', 'user', 'Who should Joe expect?', esc([draft.name, draft.phone].filter(Boolean).join(' · ')), `<p>${draft.billing?.person?.type === 'company' ? 'Choose the person who will be there.' : 'Usually the person being billed. Choose someone else if a different person will be there.'}</p>
+  <div class="property-picker" data-need="expect-person" role="radiogroup" aria-label="Who should Joe expect?">${[...(draft.billing?.person?.type === 'company' ? [] : [pickCard('expect', 'expect-person', 'billed', 'user', 'Same as the person billed', draft.billing?.person ? esc([draft.billing.person.name, draft.billing.person.phone].filter(Boolean).join(' · ')) : '', expectedId() === 'billed')]), ...people.filter(p => p.type !== 'company' && p.id !== draft.billing?.person?.id).map(p => pickCard('expect', 'expect-person', p.id, 'user', esc(p.name), personDetail(p), expectedId() === p.id, cardActions('person', p.id, esc(p.name), 'edit-expect-person'))), pickCard('expect', 'expect-person', 'new', 'plus', 'Someone new', 'We’ll save them for next time', draft.expectedId === 'new')].join('')}</div>
+  ${personForm?.target === 'expect' ? personEditor() : ''}
+  <div class="field wide" style="margin-top:14px"><label for="notes">Anything Joe should know? <span class="hint">Optional</span></label><textarea id="notes" data-field="notes" maxlength="500" placeholder="e.g. I have a dog, but he’s harmless">${esc(draft.notes)}</textarea></div>${doneButton('contact')}`)}`;
 }
 function review() {
   const q = quote(draft);
@@ -356,6 +430,7 @@ function review() {
   <div class="review-row">${icon('pin')}<span><strong>${esc([draft.property, draft.city, draft.state].filter(Boolean).join(', '))}</strong><small>${AREAS[draft.area].name} · ${q.miles} miles from Joe’s business</small></span><button class="text-btn" data-action="edit" data-id="0">Edit</button></div>
   <div class="review-row">${icon('calendar')}<span><strong>${dateLabel(draft.date)} · ${time(draft.start)}</strong><small>Services finish at ${time(draft.start + q.minutes)} · Eastern Time<br>${BUFFER}-minute travel/setup buffer included in the calendar.</small></span><button class="text-btn" data-action="edit" data-id="1">Edit</button></div>
   <div class="review-row">${icon('bag')}<span>${q.lines.map(l => `<strong style="display:block">${l.name}<small>${esc(l.details)} · ${duration(l.minutes)}</small></strong>`).join('')}</span><button class="text-btn" data-action="edit" data-id="0">Edit</button></div>
+  ${draft.billing?.person ? `<div class="review-row">${icon('receipt')}<span><strong>Invoice to ${esc(draft.billing.person.name)}</strong><small>${esc([draft.billing.person.company, draft.billing.address].filter(Boolean).join(' · '))}</small></span><button class="text-btn" data-action="edit" data-id="1">Edit</button></div>` : ''}
   <div class="review-row">${icon('user')}<span><strong>${esc(draft.name)}</strong><small>${esc(draft.phone)}${draft.email.trim() ? `<br>${esc(draft.email)}` : ''}</small>${draft.notes ? `<small>Note: ${esc(draft.notes)}</small>` : ''}</span><button class="text-btn" data-action="edit" data-id="1">Edit</button></div></section>
   <div class="notice">${icon('shield')}<span><strong>No surprises on arrival.</strong><br>This price covers the scope you selected. Any extra work requires your approval. Tax is assumed $0 in this illustrative demo.</span></div><div class="notice">${icon('calendar')}<span>Manage or reschedule your demo booking from My bookings. Real cancellation and weather policies would be set by Joe before launch.</span></div>`;
 }
@@ -475,7 +550,7 @@ document.addEventListener('click', async event => {
   if (action === 'service') return startBooking(id);
   if (action === 'fall-bundle') { startBooking(); draft.services = ['leaves','gutters']; render(); return; }
   if (action === 'rebook-default') return navigate('repeat');
-  if (action === 'rebook-selected') { const property = myProperties()[0], picked = recentPick ?? propertyHistory(property, bookings).services; if (!picked.length) return; const repeat=recentDraft(property,bookings,picked);draft=repeat.draft;draft.date=firstAvailableDate();if(repeat.needsReview)confirmChoices('picked','place','picked_services','services');else confirmChoices('place','services','size','stories');stage=repeat.needsReview?0:1; currentId = null; recentPick = null; return navigate('book'); }
+  if (action === 'rebook-selected') { const property = homeProperty() ?? PROPERTIES[0], picked = recentPick ?? propertyHistory(property, bookings).services; if (!picked.length) return; const repeat=recentDraft(property,bookings,picked);draft=repeat.draft;draft.date=firstAvailableDate();if(repeat.needsReview)confirmChoices('picked','place','picked_services','services');else confirmChoices('place','services','size','stories');stage=repeat.needsReview?0:1; currentId = null; recentPick = null; return navigate('book'); }
   if (action === 'repeat-same') return startRepeat(false);
   if (action === 'repeat-edit') return startRepeat(true);
   if (action === 'rebook') return startBooking('leaves', bookings.find(b=>b.id===id)?.draft);
@@ -495,7 +570,66 @@ document.addEventListener('click', async event => {
     propertyEdits[e.id] = { ...propertyEdits[e.id], ...changes }; persistProperties(); editingProperty = null;
     useProperty(draft, myProperties().find(p => p.id === e.id)); sectionState(); confirmed.picked = true; draft.start = null; error = ''; render(); announce('Property updated. Joe will confirm any access changes.'); return;
   }
-  if (action === 'section-done') { if (!doneReady(id)) { showWhatsMissing(id); announce('Please finish the highlighted items.'); return; } confirmChoices(id); advance(id); error = ''; render(); advanceFrom = null; return; }
+  if (action === 'demo-returning') { people = [MARY, ...people.filter(p => p.id !== MARY.id)]; persistPeople(); recentPick = null; render(); announce('Continuing as Mary.'); return; }
+  if (action === 'new-customer') { people = []; addedProperties = []; propertyEdits = {}; persistPeople(); persistProperties(); recentPick = null; homePick = []; render(); announce('Starting as a new customer.'); return; }
+  if (action === 'bill-person') { sectionState(); if (id === 'new') { personForm = newPerson('bill'); draft.billing = { ...draft.billing, person: undefined }; render(); document.querySelector('#person-name')?.focus(); return; } const p = people.find(x => x.id === id); if (p && !billable(p)) { personForm = { ...editPersonForm(p, 'bill'), select: true }; draft.billing = { ...draft.billing, person: undefined }; render(); document.querySelector('#person-name')?.focus(); announce(`Add the missing billing details for ${p.name}.`); return; } if (p) { personForm = personForm?.target === 'bill' ? null : personForm; setBilled(p); render(); snapNext('billing'); } return; }
+  if (action === 'bill-address') { sectionState(); if (id === 'new') { addressForm = { address: '', city: '', state: 'RI', zip: '' }; draft.billing = { ...draft.billing, addressId: undefined, address: undefined }; render(); document.querySelector('#address-address')?.focus(); return; } addressForm = null; const saved = myProperties().find(p => p.id === id); if ((id === 'service' && !validZip(draft.zip)) || (saved && !validZip(saved.zip))) { addressForm = id === 'service' ? { address: draft.property, city: draft.city, state: draft.state, zip: '' } : { editId: saved.id, select: true, address: saved.address ?? '', city: saved.city ?? '', state: saved.state ?? '', zip: '' }; render(); document.querySelector('#address-zip')?.focus(); announce('Add the ZIP code for this address.'); return; } const address = id === 'service' ? serviceAddress() : id === 'person' ? draft.billing?.personBillingAddress : saved && addressText(saved); if (address) { draft.billing = { ...draft.billing, addressId: id, address }; render(); snapNext('billing'); } return; }
+  if (action === 'expect-person') { sectionState(); if (id === 'new') { personForm = newPerson('expect'); draft.expectedId = 'new'; render(); document.querySelector('#person-name')?.focus(); return; } personForm = personForm?.target === 'expect' ? null : personForm; draft.expectedId = id; syncExpected(); render(); return; }
+  if (action === 'edit-bill-person' || action === 'edit-expect-person') { const p = people.find(x => x.id === id); if (p) { removing = null; personForm = editPersonForm(p, action === 'edit-bill-person' ? 'bill' : 'expect'); render(); document.querySelector('#person-name')?.focus(); } return; }
+  if (action === 'edit-address') { const p = myProperties().find(x => x.id === id); if (p) { removing = null; addressForm = { editId: p.id, address: p.address ?? '', city: p.city ?? '', state: p.state ?? '', zip: p.zip ?? '' }; render(); document.querySelector('#address-address')?.focus(); } return; }
+  if (action === 'ask-remove') { removing = id; render(); document.getElementById('confirm-remove')?.focus(); return; }
+  if (action === 'cancel-remove') { removing = null; render(); return; }
+  if (action === 'confirm-remove') {
+    const split = id.indexOf(':'), kind = id.slice(0, split), target = id.slice(split + 1); removing = null; sectionState();
+    if (kind === 'person') {
+      people = people.filter(p => p.id !== target); persistPeople();
+      if (personForm?.editId === target) personForm = null;
+      if (draft.billing?.person?.id === target) { draft.billing = { ...draft.billing, person: undefined, personBillingAddress: undefined, ...(draft.billing.addressId === 'person' ? { addressId: undefined, address: undefined } : {}) }; confirmed.billing = false; }
+      if (draft.expectedId === target) draft.expectedId = undefined;
+      syncExpected();
+    } else {
+      if (addedProperties.some(p => p.id === target)) { addedProperties = addedProperties.filter(p => p.id !== target); delete propertyEdits[target]; } else propertyEdits[target] = { ...propertyEdits[target], removed: true };
+      persistProperties();
+      if (addressForm?.editId === target) addressForm = null;
+      if (editingProperty?.id === target) editingProperty = null;
+      if (draft.billing?.addressId === target) { draft.billing = { ...draft.billing, addressId: undefined, address: undefined }; confirmed.billing = false; }
+      if (draft.propertyId === target) { useProperty(draft, serviceProperties()[0]); confirmed.picked = false; confirmed.place = false; draft.start = null; }
+    }
+    render(); announce('Removed. Past bookings keep their details.'); return;
+  }
+  if (action === 'person-type') { if (personForm) { personForm.type = id; render(); } return; }
+  if (action === 'cancel-person') { if (personForm?.target === 'expect' && !personForm.editId) { draft.expectedId = 'billed'; syncExpected(); } personForm = null; render(); return; }
+  if (action === 'save-person') {
+    if (!personForm || !personReady(personForm)) return;
+    const f = personForm, before = people.find(x => x.id === f.editId), state = f.billingState.trim().toUpperCase();
+    const details = { type: f.type ?? 'person', name: f.name.trim(), phone: f.phone.trim(), email: f.email.trim(), company: f.type === 'company' ? '' : before?.company ?? '', ...(f.target === 'bill' ? { billingStreet: f.billingStreet.trim(), billingCity: f.billingCity.trim(), billingState: state, billingZip: f.billingZip.trim(), billingAddress: addressText({ address: f.billingStreet.trim(), city: f.billingCity.trim(), state, zip: f.billingZip.trim() }) } : {}) };
+    if (f.editId) {
+      const edited = { ...before, ...details };
+      people = people.map(p => p.id === f.editId ? edited : p); persistPeople(); personForm = null;
+      if (f.select || draft.billing?.person?.id === f.editId) setBilled(edited); else syncExpected();
+      render(); announce(`${edited.name} updated.`); if (f.select) snapNext('billing'); return;
+    }
+    const p = { id: `person-${Date.now().toString(36)}-${people.length}`, billingAddress: '', ...details };
+    people.push(p); persistPeople(); personForm = null;
+    if (f.target === 'bill') setBilled(p); else { draft.expectedId = p.id; syncExpected(); }
+    render(); announce(`${p.name} saved for next time.`); if (f.target === 'bill') snapNext('billing'); return;
+  }
+  if (action === 'cancel-address') { addressForm = null; render(); return; }
+  if (action === 'save-address') {
+    if (!addressForm || !addressReady(addressForm)) return;
+    const f = addressForm, state = f.state.trim().toUpperCase(), address = f.address.trim(), city = f.city.trim(), zip = f.zip.trim();
+    if (f.editId) {
+      const before = myProperties().find(x => x.id === f.editId);
+      propertyEdits[f.editId] = { ...propertyEdits[f.editId], address, city, state, zip, area: areaForCity(city, state), ...(before?.label === before?.address ? { label: address } : {}), ...(before?.address !== address ? { accessConfirmed: false } : {}) };
+      persistProperties(); addressForm = null;
+      if (f.select || draft.billing?.addressId === f.editId) draft.billing = { ...draft.billing, addressId: f.editId, address: addressText({ address, city, state, zip }) };
+      render(); announce('Address updated.'); if (f.select) snapNext('billing'); return;
+    }
+    const p = { id: `prop-${Date.now().toString(36)}-${addedProperties.length}`, customerId: CUSTOMER_ID, label: address, address, city, state, zip, area: areaForCity(city, state), size: 'medium', stories: 1, access: '', parking: '', accessConfirmed: false, propertyAllowance: false, billingOnly: true };
+    addedProperties.push(p); persistProperties(); addressForm = null; draft.billing = { ...draft.billing, addressId: p.id, address: addressText(p) };
+    render(); announce('Address saved for next time.'); snapNext('billing'); return;
+  }
+  if (action === 'section-done') { if (!doneReady(id)) { showWhatsMissing(id); announce('Please finish the highlighted items.'); return; } if (id === 'quote' && !people.some(p => p.name === draft.name.trim() && p.phone === draft.phone.trim())) { people.push({ id: `person-${Date.now().toString(36)}-${people.length}`, name: draft.name.trim(), phone: draft.phone.trim(), email: draft.email.trim(), type: 'person', company: '', billingAddress: '' }); persistPeople(); } confirmChoices(id); advance(id); error = ''; render(); advanceFrom = null; return; }
   if (action === 'home-continue') { if (!homePick.length) return; const picked = [...homePick]; homePick = []; startBooking(picked[0]); draft.services = picked; confirmChoices('picked_services', 'services'); render(); snapNext(); return; }
   if (action === 'service-filter') { serviceCategory = id; if (id === 'all') serviceQuery = ''; render(); document.querySelector('.filter-chip.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); return; }
   if (action === 'toggle-section') { sectionOpen[id] = !(sectionOpen[id] ?? false); render(); return; }
@@ -505,7 +639,7 @@ document.addEventListener('click', async event => {
   if (action === 'next') {
     error='';
     if (stage === 0 && !draft.approvedOffer) { const open=['place','services','details'].find(id=>!sectionComplete(id)); if(open){error=open==='place'?'Choose a property, then tap Done.':open==='services'?'Choose at least one service, then tap Done.':'Confirm your yard size and home details.';showWhatsMissing(open);return;} }
-    if (stage === 1) { const open=['time','contact'].find(id=>!sectionComplete(id)); if(open){error=open==='time'?'Choose a start time, then tap Done.':'Confirm your contact details.';showWhatsMissing(open);return;} }
+    if (stage === 1) { const open=['time','billing','contact'].find(id=>!sectionComplete(id)); if(open){error=open==='time'?'Choose a start time, then tap Done.':open==='billing'?'Add the invoice details, then tap Done.':'Confirm who Joe should expect, then tap Done.';showWhatsMissing(open);return;} }
     if (stage === 0) { if(quote(draft).missing.length){error='Please answer: '+quote(draft).missing.join(', ');render();return;} if(quote(draft).assessment||quote(draft).minutes+30>240)return; if(!draft.property.trim()){error='Add the street address to continue.';render();return;} if(!quote(draft).serviceable){error='This property is outside Joe’s demo service area.';render();return;} stage=1; focusMain=true; render(); return; }
     const validation=validBooking(draft,bookings);
     if (validation) { error=validation; render(); return; }
@@ -583,6 +717,7 @@ document.addEventListener('input',event=>{if(event.target.matches('[data-service
 document.addEventListener('input',event=>{const el=event.target,field=el.dataset.field;if(!['property','city','state','name','email','phone'].includes(field))return;draft[field]=field==='state'?el.value.trim().toUpperCase():el.value;if(field==='city'||field==='state')draft.area=areaForCity(draft.city,draft.state);applyNeeds();});
 // Tapping Done must not blur the field first: the blur's re-render would swallow the tap.
 document.addEventListener('pointerdown',event=>{if(event.target.closest('.section-done'))event.preventDefault();});
+document.addEventListener('input',event=>{const person=event.target.dataset.personField,address=event.target.dataset.addressField;if(person&&personForm){personForm[person]=event.target.value;const save=document.querySelector('[data-action="save-person"]');if(save)save.disabled=!personReady(personForm);}if(address&&addressForm){addressForm[address]=event.target.value;const save=document.querySelector('[data-action="save-address"]');if(save)save.disabled=!addressReady(addressForm);}});
 document.addEventListener('change', async event => {
   const el=event.target;
   if(await hq.change(el))return;
@@ -590,7 +725,7 @@ document.addEventListener('change', async event => {
   if(wf.change(el)){if(el.dataset.wf==='answer'&&el.type==='radio')snapNext('details');return;}
   if (el.dataset.pack) { packed[`${ownerDate}:${el.dataset.pack}`] = el.checked; persistOperations(); render(); return; }
   if (el.dataset.ownerAccess) { const b = bookings.find(item => item.id === el.dataset.ownerAccess); if (b) { b.draft.accessConfirmed = el.checked; if (b.pendingChange) b.pendingChange.draft.accessConfirmed = el.checked; persist(); } render(); announce(el.checked ? 'Access details confirmed for this job.' : 'Access marked as needing confirmation.'); return; }
-  if (el.dataset.recent) { const id = el.dataset.recent, current = recentPick ?? propertyHistory(PROPERTIES[0], bookings).services; recentPick = el.checked ? [...new Set([...current, id])] : current.filter(s => s !== id); render(); return; }
+  if (el.dataset.recent) { const id = el.dataset.recent, current = recentPick ?? propertyHistory(homeProperty() ?? PROPERTIES[0], bookings).services; recentPick = el.checked ? [...new Set([...current, id])] : current.filter(s => s !== id); render(); return; }
   if (el.dataset.homePick) { const id = el.dataset.homePick; homePick = el.checked ? [...homePick, id] : homePick.filter(s => s !== id); render(); return; }
   if (el.dataset.service) { const id=el.dataset.service; confirmChoices('picked_services'); draft.services=el.checked?[...new Set([...draft.services,id])]:draft.services.filter(s=>s!==id);draft.start=null;error='';render();announce(`Price updated to ${money(quote(draft).total)}`);return; }
   const field=el.dataset.field;if(!field)return;

@@ -25,6 +25,13 @@ Derek's booking-flow work from the same November 1 copy, which was not part of t
 - **Properties:** choose a saved property, edit it in place, or add a new one with street, city, and state. The travel zone comes from city and state; anywhere Joe doesn't serve is blocked with an explanation. Storage: `business-hq-properties-v1` and `business-hq-property-edits-v1`.
 - **Access:** access text from a customer is now an answer for Joe to confirm, not a confirmation. Changing a saved property's address or access clears its confirmation. The field desk shows **Customer replied** and a **Review access from …** task until Joe saves it.
 
+## Customer identity and invoice details
+
+- **Greeting:** a first-time visitor sees "Hi, how can we help today?", with no sample history or saved properties. Once a person is saved, the greeting uses their first name. For the returning-customer demo, choose **Demo: continue as returning customer Mary**. **Start as a new customer** clears saved people and added properties in this browser; bookings stay.
+- **Invoice:** after the time, customers choose who to bill and a billing address, or add new ones. People and addresses are saved immediately for future bookings, and can be edited or removed from their cards; past bookings keep the details they were made with. Whoever is billed is a person or a company, and needs a name, phone, email, and full billing address with ZIP code. Anyone saved without those details fills them in when first billed. A new person Joe only expects needs a name and phone; email is optional. A billing address outside Joe's service area can't be chosen as a service property.
+- **Who should Joe expect?:** defaults to the person billed. Customers can pick another saved person or add someone new. A company can't be expected, so billing a company requires choosing a person.
+- **Records:** each booking keeps a snapshot in `draft.billing`, shown on the review step and in Jobs & money. Storage: `business-hq-people-v1`.
+
 ## Sharing, readability, and calendar overview
 
 - One sticky company header shows the brand, tagline, and live Eastern-time opening status. Both sides have **Share**; customers have Call and owners have Help. Opening the status shows the full weekly hours. Copy the public booking link or open the device's share options. The link opens the customer page even if that tab previously used owner mode, and carries no booking details.

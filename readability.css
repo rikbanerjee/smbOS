@@ -166,3 +166,8 @@ main:has(.confirmation){padding-bottom:20px}
 @media(max-width:620px){main:has(.confirmation){padding-bottom:125px}.confirmation .panel+.panel{margin-top:8px}.confirmation>.text-btn{margin-top:0}}
 @media(min-width:621px){.confirmation .success p br{display:none}}
 #announcement{top:0}
+
+/* Invoice details and saved people */
+.billing-address-label{display:block;margin-top:18px}[data-section="billing"] .property-picker,[data-section="contact"] .property-picker{margin-top:8px}
+.property-picker+.property-editor{margin-top:10px}.identity-switch{display:block;margin-top:6px;padding-left:0;font-size:14px}
+.card-actions{display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px;margin-top:6px}.card-actions .text-btn{min-height:32px;padding:2px 0;font-size:14px}.card-confirm>span{font-size:14px;font-weight:600;color:#6b5a14}
