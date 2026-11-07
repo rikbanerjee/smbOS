@@ -24,7 +24,7 @@ Changed while merging:
 - `askQuestions` no longer parses HTML with a `<template>`. `wf.questions` takes an `unanswered` predicate, so the flow renders in Node tests.
 - Book again now marks the sections it already knows as confirmed, so review opens directly on the questions, and reads the property with saved customer edits.
 - Field desk: added the **Customer replied** tag and **Review access from …** task, because customer answers no longer confirm access by themselves.
-- `combined-11` replaces `combined-10` in every asset URL.
+- `combined-12` replaces `combined-10` in every asset URL.
 
 ## Validation
 

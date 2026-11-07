@@ -1,8 +1,8 @@
 // Template/event smoke checks in Node. These do not replace visual browser QA.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {defaultDraft,quote} from '../model.js?v=combined-11';
-import * as workflow from '../workflow-model.js?v=combined-11';
+import {defaultDraft,quote} from '../model.js?v=combined-12';
+import * as workflow from '../workflow-model.js?v=combined-12';
 let bootId=0;
 const RealDate=Date;
 async function boot(url,bookings=[],work={}){
@@ -22,7 +22,7 @@ test('selecting another recent service opens its questions before scheduling',as
  const page=await boot('https://example.test/?view=customer');try{await page.recent('gutters',true);assert.match(page.root.innerHTML,/2 selected/);await page.click('rebook-selected');assert.match(page.root.innerHTML,/Let’s plan your visit/);assert.match(page.root.innerHTML,/Are gutter guards fitted/);}finally{page.restore();}
 });
 test('same-service quick rebooking uses current pricing and shows the schedule',async()=>{
- const page=await boot('https://example.test/?view=customer');try{await page.click('rebook-selected');assert.match(page.root.innerHTML,/Find your Thursday/);assert.match(page.root.innerHTML,/\$239\.25/);}finally{page.restore();}
+ const page=await boot('https://example.test/?view=customer');try{await page.click('rebook-selected');assert.match(page.root.innerHTML,/Find your time/);assert.match(page.root.innerHTML,/\$239\.25/);}finally{page.restore();}
 });
 test('owner sample still renders the field desk with Help and all four navigation areas',async()=>{
  const page=await boot('https://example.test/?view=owner&sample=1');try{for(const label of ['My day','Schedule','To do','My business','Field desk help','Load up once.'])assert.ok(page.root.innerHTML.includes(label));assert.match(page.root.innerHTML,/\$331\.50/);await page.click('hq-help');assert.match(page.root.innerHTML,/A simpler working day/);}finally{page.restore();}
@@ -66,6 +66,24 @@ test('pressing Done early keeps the section open and explains what is missing',a
   await page.click('section-done','details');assert.match(page.root.innerHTML,/Finish the highlighted items to continue\./);assert.ok(page.root.innerHTML.includes('data-need="stories"'));assert.ok(!/step-section done[^>]*data-section="details"/.test(page.root.innerHTML));
  }finally{page.restore();}
 });
-test('both Continue buttons stay pressable before a start time is picked',async()=>{
- const page=await boot('https://example.test/?view=customer');try{await page.click('rebook-selected');assert.match(page.root.innerHTML,/Find your Thursday/);assert.ok(!/data-action="next"[^>]* disabled/.test(page.root.innerHTML));}finally{page.restore();}
+test('start times stay hidden until a day is picked, then follow that day’s hours',async()=>{
+ const page=await boot('https://example.test/?view=customer');try{await page.click('rebook-selected');
+  assert.match(page.root.innerHTML,/Pick a day to see Joe’s open times/);assert.ok(!page.root.innerHTML.includes('data-action="slot"'));
+  assert.ok(!/data-action="next"[^>]* disabled/.test(page.root.innerHTML),'both Continue buttons stay pressable before a time is picked');
+  assert.match(page.root.innerHTML,/class="week-day" aria-pressed="false"[^>]*data-action="date" data-id="2026-10-30"/);assert.match(page.root.innerHTML,/<small>Off<\/small>/);
+  await page.click('date','2026-10-30');assert.match(page.root.innerHTML,/Joe works 8 AM–12 PM/);assert.match(page.root.innerHTML,/data-action="slot" data-id="495"/);
+  await page.click('date','2026-10-29');assert.match(page.root.innerHTML,/Joe works 1–5 PM/);assert.match(page.root.innerHTML,/data-action="slot" data-id="795"/);assert.ok(!page.root.innerHTML.includes('data-action="slot" data-id="495"'));
+  await page.click('week-shift','2026-11-02');assert.match(page.root.innerHTML,/Nov 2 – Nov 8, 2026/);
+ }finally{page.restore();}
 });
+test('a section waits for Done even when every choice is made',async()=>{
+ const page=await boot('https://example.test/?view=customer');try{await page.recent('gutters',true);await page.click('rebook-selected');
+  const done=id=>new RegExp(`class="panel step-section[^"]* done[^"]*" data-section="${id}"`).test(page.root.innerHTML);
+  await page.click('size','small');await page.click('haul','no');await page.click('stories','1');await page.answer('leaves','debris','no');await page.answer('gutters','guards','no');
+  assert.ok(!done('details'),'all answered, Done not pressed');await page.click('section-done','details');assert.ok(done('details'),'Done pressed');
+  await page.click('next');await page.click('date','2026-10-29');await page.click('slot','795');
+  assert.ok(!done('time'),'time picked, Done not pressed');assert.match(page.root.innerHTML,/step-section[^"]*" data-section="contact"/);await page.click('section-done','time');assert.ok(done('time'),'Done pressed');
+  await new Promise(resolve=>setTimeout(resolve));
+ }finally{page.restore();}
+});
+

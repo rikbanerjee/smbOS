@@ -1,8 +1,8 @@
-import {SERVICES,AREAS,DEMO_DATES,BUFFER,money,time,duration,dateLabel,quote,slots} from './model.js?v=combined-11';
-import {visibleQuestions} from './rules.js?v=combined-11';
-import {packingList,readiness} from './operations.js?v=combined-11';
-import {balance,proposeExtra,recordPayment} from './workflow-model.js?v=combined-11';
-import * as field from './owner-model.js?v=combined-11';
+import {SERVICES,AREAS,DEMO_DATES,BUFFER,money,time,duration,dateLabel,quote,slots} from './model.js?v=combined-12';
+import {visibleQuestions} from './rules.js?v=combined-12';
+import {packingList,readiness} from './operations.js?v=combined-12';
+import {balance,proposeExtra,recordPayment} from './workflow-model.js?v=combined-12';
+import * as field from './owner-model.js?v=combined-12';
 
 export function createFieldDesk(ctx){
  const {esc:e,icon}=ctx;let desk=field.freshDesk();try{desk=field.loadDesk(JSON.parse(localStorage.getItem(field.OWNER_STORE)||'null'));}catch{}

@@ -1,6 +1,6 @@
-import {SERVICES,DEMO_DATES,defaultDraft,quote,slots,validBooking} from './model.js?v=combined-11';
-import {packingList} from './operations.js?v=combined-11';
-import {finishJob,balance} from './workflow-model.js?v=combined-11';
+import {SERVICES,DEMO_DATES,defaultDraft,quote,slots,validBooking} from './model.js?v=combined-12';
+import {packingList} from './operations.js?v=combined-12';
+import {finishJob,balance} from './workflow-model.js?v=combined-12';
 
 export const OWNER_STORE='business-hq-field-desk-v1';
 export const freshDesk=()=>({jobs:{},propertyNotes:{},unavailable:[],stock:{'Leaf bags':24}});

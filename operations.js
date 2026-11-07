@@ -1,5 +1,5 @@
-import {DEFAULT_RULES} from './rules.js?v=combined-11';
-import { SERVICES, BUFFER, DEMO_DATES, defaultDraft, quote, slots, validBooking } from './model.js?v=combined-11';
+import {DEFAULT_RULES} from './rules.js?v=combined-12';
+import { SERVICES, BUFFER, DEMO_DATES, defaultDraft, quote, slots, validBooking } from './model.js?v=combined-12';
 
 export const DEMO_CLOCK = 780; // Deliberate sample clock: 1 PM on the selected workday.
 export const PROPERTIES = [

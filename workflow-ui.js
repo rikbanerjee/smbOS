@@ -1,6 +1,6 @@
-import {SERVICES,DEMO_DATES,freshPromotion,defaultDraft,quote,money,duration,dateLabel,time,slots} from './model.js?v=combined-11';
-import {DEFAULT_RULES,getRules,publishRules,visibleQuestions,validateRules} from './rules.js?v=combined-11';
-import * as domain from './workflow-model.js?v=combined-11';
+import {SERVICES,DEMO_DATES,freshPromotion,defaultDraft,quote,money,duration,dateLabel,time,slots} from './model.js?v=combined-12';
+import {DEFAULT_RULES,getRules,publishRules,visibleQuestions,validateRules} from './rules.js?v=combined-12';
+import * as domain from './workflow-model.js?v=combined-12';
 export const WORK_STORE='business-hq-workflows-v3',RULE_STORE='business-hq-rules-v3';
 export function loadPublished(){try{const saved=localStorage.getItem(RULE_STORE);if(saved)publishRules(JSON.parse(saved));}catch{ /* Use the standard catalog when saved rules cannot be loaded. */ }}
 export function createWorkflows(ctx){

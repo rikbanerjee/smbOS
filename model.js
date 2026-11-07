@@ -1,4 +1,4 @@
-import { DEFAULT_RULES, getRules, effects } from './rules.js?v=combined-11';
+import { DEFAULT_RULES, getRules, effects } from './rules.js?v=combined-12';
 export const SERVICES = {
   leaves: { name: 'Fall leaf cleanup', category: 'Lawn & yard', icon: 'leaf', description: 'A fresh start for your lawn, beds, and walkways.', base: 150, minutes: 90, tools: ['Leaf blower', 'Rake', 'Leaf bags', 'Gloves'] },
   gutters: { name: 'Gutter cleaning', category: 'Home exterior', icon: 'house', description: 'Clear gutters. Flowing downspouts. Ready for the rain.', base: 120, minutes: 90, tools: ['Ladder', 'Gutter scoop', 'Hose', 'Safety equipment'] },
@@ -12,7 +12,16 @@ export function areaForCity(city = '', state = '') {
   if (st && st !== 'RI') return 'outside';
   return Object.keys(AREAS).find(id => AREAS[id].miles !== null && AREAS[id].name.toLowerCase() === name) ?? 'outside';
 }
-export const DEMO_DATES = ['2026-10-29','2026-11-05','2026-11-12','2026-11-19','2026-11-26','2026-12-03','2026-12-10','2026-12-17','2027-10-28','2027-11-04'];
+// Joe's sample hours by weekday (0 = Sunday), in minutes after midnight Eastern; null = closed.
+// Each window is four hours because quote() sends longer visits to an owner review on that basis.
+export const HOURS = [null, [540, 780], null, [780, 1020], [780, 1020], [480, 720], null];
+export const hoursFor = date => HOURS[new Date(`${date}T12:00:00Z`).getUTCDay()] ?? null;
+function workingDays(from, to) {
+  const days = [];
+  for (const d = new Date(`${from}T12:00:00Z`); d.toISOString().slice(0, 10) <= to; d.setUTCDate(d.getUTCDate() + 1)) if (HOURS[d.getUTCDay()]) days.push(d.toISOString().slice(0, 10));
+  return days;
+}
+export const DEMO_DATES = [...workingDays('2026-10-29', '2026-12-18'), ...workingDays('2027-10-28', '2027-11-05')];
 export const BUFFER = 15;
 // Fall seasonal promotion: discount rate per service for visits in September–November.
 export const FALL_PROMO = { name: 'Fall seasonal promotion', months: [9, 10, 11], rates: { gutters: 0.10, leaves: 0.15 } };
@@ -27,12 +36,11 @@ export function fallPromoEnds(date) {
   const last = new Date(Date.UTC(Number(String(date).slice(0, 4)), Math.max(...FALL_PROMO.months), 0));
   return last.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
-// Opening hours by weekday (0 = Sunday), in minutes after midnight Eastern; null = closed.
-export const HOURS = [null, null, null, null, [780, 1020], null, null];
 export const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const clock = n => `${Math.floor(n / 60) % 12 || 12}${n % 60 ? `:${String(n % 60).padStart(2, '0')}` : ''}`;
 const meridiem = n => n >= 720 ? 'PM' : 'AM';
 export const shortTime = n => `${clock(n)} ${meridiem(n)}`;
+export const shortHours = h => `${clock(h[0])}–${clock(h[1])}`;
 export function hoursRange(h) {
   if (!h) return 'Closed';
   const [open, close] = h;
@@ -92,9 +100,10 @@ export function quote(draft) {
 export function slots(draft, bookings = [], excludingId = null, blockedDates = []) {
   const q = quote(draft);
   if (!q.serviceable || q.assessment || !q.lines.length || !DEMO_DATES.includes(draft.date) || blockedDates.includes(draft.date)) return [];
-  const result = [];
-  // First departure and the final travel/setup buffer both fit Joe's 1–5 PM workday.
-  for (let start = 780 + BUFFER; start + q.block <= 1020; start += 15) {
+  const hours = hoursFor(draft.date), result = [];
+  if (!hours) return result;
+  // First departure and the final travel/setup buffer both fit Joe's hours that day.
+  for (let start = hours[0] + BUFFER; start + q.block <= hours[1]; start += 15) {
     if (!bookings.some(b => b.id !== excludingId && b.status !== 'cancelled' && [b, ...(b.pendingChange?.status === 'awaiting_customer' ? [{ draft: b.pendingChange.draft, block: quote(b.pendingChange.draft).block }] : [])].some(visit => visit.draft.date === draft.date && start < visit.draft.start + visit.block && start + q.block > visit.draft.start))) result.push(start);
   }
   return result;

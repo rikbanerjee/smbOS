@@ -1,10 +1,10 @@
-import {createFieldDesk} from './owner-hq.js?v=combined-11';
-import {calendarControls,calendarOverview,shiftPeriod,weekDates} from './calendar.js?v=combined-11';
-import {DEFAULT_RULES,getRules,visibleQuestions} from './rules.js?v=combined-11';
-import {createWorkflows,loadPublished,WORK_STORE,RULE_STORE} from './workflow-ui.js?v=combined-11';
-import { SERVICES, AREAS, DEMO_DATES, BUFFER, FALL_PROMO, LEGACY_PROMO, freshPromotion, inFallPromo, fallPromoEnds, HOURS, WEEKDAYS, hoursRange, hoursStatus, easternNow, money, duration, time, dateLabel, defaultDraft, areaForCity, quote, slots as modelSlots, validBooking as modelValidBooking } from './model.js?v=combined-11';
-import { PROPERTIES, propertyHistory, recentServices, repeatDraft, recentDraft, packingList, sampleDay, proposeRainPlan, approveRainPlan, respondToRainChange, readiness } from './operations.js?v=combined-11';
-import { repeatExperience, providerDay, weatherReview, customerWeatherCard } from './experience.js?v=combined-11';
+import {createFieldDesk} from './owner-hq.js?v=combined-12';
+import {calendarControls,calendarOverview,shiftPeriod,weekDates} from './calendar.js?v=combined-12';
+import {DEFAULT_RULES,getRules,visibleQuestions} from './rules.js?v=combined-12';
+import {createWorkflows,loadPublished,WORK_STORE,RULE_STORE} from './workflow-ui.js?v=combined-12';
+import { SERVICES, AREAS, DEMO_DATES, BUFFER, FALL_PROMO, LEGACY_PROMO, freshPromotion, inFallPromo, fallPromoEnds, HOURS, WEEKDAYS, hoursFor, shortHours, hoursRange, hoursStatus, easternNow, money, duration, time, dateLabel, defaultDraft, areaForCity, quote, slots as modelSlots, validBooking as modelValidBooking } from './model.js?v=combined-12';
+import { PROPERTIES, propertyHistory, recentServices, repeatDraft, recentDraft, packingList, sampleDay, proposeRainPlan, approveRainPlan, respondToRainChange, readiness } from './operations.js?v=combined-12';
+import { repeatExperience, providerDay, weatherReview, customerWeatherCard } from './experience.js?v=combined-12';
 
 const paths = {
   help:'<circle cx="12" cy="12" r="9"/><path d="M9.5 8.5a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 4.5m0 3h.01"/>',
@@ -156,8 +156,8 @@ function applyServiceFilter() {
 function stepper() { return `<div class="stepper" aria-label="Booking progress">${['Your visit', 'Find a time', 'Review & book'].map((name, i) => `${i ? '<span class="step-line"></span>' : ''}<div class="step ${i === stage ? 'active' : i < stage ? 'done' : ''}" ${i === stage ? 'aria-current="step"' : ''}><b>${i < stage ? '✓' : i + 1}</b>${name}</div>`).join('')}</div>`; }
 // Booking sections collapse once their required fields are complete, with a green check. Tap the header to reopen.
 // Prefilled choices are only suggestions: a section counts as complete after the customer taps to confirm it.
-let sectionOpen = {}, sectionDone = {}, sectionLocked = {}, sectionDraft = null, confirmed = {}, showMissing = {};
-function sectionState() { if (sectionDraft !== draft) { sectionDraft = draft; sectionOpen = {}; sectionDone = {}; sectionLocked = {}; confirmed = {}; showMissing = {}; } }
+let sectionOpen = {}, sectionDone = {}, sectionLocked = {}, sectionDraft = null, confirmed = {}, showMissing = {}, bookingWeek = null;
+function sectionState() { if (sectionDraft !== draft) { sectionDraft = draft; sectionOpen = {}; sectionDone = {}; sectionLocked = {}; confirmed = {}; showMissing = {}; bookingWeek = null; } }
 function confirmChoices(...ids) { sectionState(); ids.forEach(id => { confirmed[id] = true; }); }
 const req = '<span class="req" aria-hidden="true">*</span>';
 const placeComplete = () => Boolean(draft.property?.trim() && draft.city?.trim() && draft.state?.trim() && quote(draft).serviceable);
@@ -199,7 +199,7 @@ function missingItems(id) {
     return [!draft.property?.trim() && 'property', (!draft.city?.trim() || !quote(draft).serviceable) && 'city', !draft.state?.trim() && 'state'].filter(Boolean);
   }
   if (id === 'services') return doneReady('services') ? [] : ['services'];
-  if (id === 'time') return draft.start === null ? ['time'] : [];
+  if (id === 'time') return !dayChosen() ? ['date'] : draft.start === null ? ['time'] : [];
   if (id === 'details') {
     const list = [draft.services.some(s => s === 'leaves' || s === 'mowing') && !confirmed.size && 'size', draft.services.includes('leaves') && !confirmed.haul && 'haul', draft.services.includes('gutters') && !confirmed.stories && 'stories'].filter(Boolean);
     for (const service of draft.services) for (const q of visibleQuestions(service, draft)) {
@@ -221,11 +221,26 @@ function applyNeeds() {
 const continueBlocked = q => (!q.serviceable || !q.lines.length) && (stage !== 0 || (sectionComplete('place') && sectionComplete('services')));
 // Lands an element just below the sticky header.
 const headerOffset = () => (document.querySelector('.topbar')?.getBoundingClientRect().height ?? 116) + 12;
+const dayChosen = () => Boolean(confirmed.date) || draft.start !== null;
+// One week at a time. Each working day shows its own hours; arrows skip weeks with no sample dates.
+function weekPicker() {
+  const shown = weekDates(bookingWeek ?? draft.date), earlier = DEMO_DATES.filter(d => d < shown[0]).at(-1), later = DEMO_DATES.find(d => d > shown[6]);
+  const short = d => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const day = d => {
+    const when = new Date(`${d}T12:00:00Z`), hours = hoursFor(d), bookable = DEMO_DATES.includes(d), rain = blockedDates.includes(d);
+    const fits = bookable && !rain && modelSlots({ ...draft, date: d, start: null }, bookings, null, blockedDates).length > 0;
+    const status = !hours ? 'Off' : !bookable ? '–' : rain ? 'Paused' : fits ? shortHours(hours) : 'Full';
+    const reason = !hours ? 'Joe is off' : !bookable ? 'not bookable' : rain ? 'paused for rain' : fits ? `open ${hoursRange(hours)}` : 'no time fits this visit';
+    const on = dayChosen() && d === draft.date;
+    return `<button class="week-day${on ? ' selected' : ''}"${fits ? '' : ' disabled'} aria-pressed="${on}" aria-label="${when.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' })}, ${reason}" data-action="date" data-id="${d}"><span>${when.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })}</span><b>${when.getUTCDate()}</b><small>${status}</small></button>`;
+  };
+  return `<div class="week-picker" data-need="date"><div class="week-head"><button class="icon-btn week-nav" id="week-prev" aria-label="Previous week" data-action="week-shift" data-id="${earlier ?? ''}"${earlier ? '' : ' disabled'}>${icon('back')}</button><h4>${short(shown[0])} – ${short(shown[6])}, ${shown[6].slice(0, 4)}</h4><button class="icon-btn week-nav" id="week-next" aria-label="Next week" data-action="week-shift" data-id="${later ?? ''}"${later ? '' : ' disabled'}>${icon('arrow')}</button></div><div class="week-days" role="group" aria-label="Choose a day">${shown.map(day).join('')}</div></div>`;
+}
 function snapTo(el, ms = 450) { glideTo(scrollY + el.getBoundingClientRect().top - headerOffset(), ms); }
 // With nothing left to answer, the visit summary is next: its heading lands just below the header, never scrolled past.
 function snapToSummary(ms) { const summary = document.querySelector('.booking-layout > .summary'); if (summary && getComputedStyle(summary).position !== 'fixed' && summary.offsetHeight) { snapTo(summary, ms); return true; } return false; }
 function snapToNeed(id) {
-  const key = missingItems(id)[0], target = (key && needEl(key)) ?? document.querySelector(`.section-done[data-id="${id}"]`) ?? document.querySelector(`.step-section[data-section="${id}"]`);
+  const key = id === 'time' && missingItems(id).length ? 'date' : missingItems(id)[0], target = (key && needEl(key)) ?? document.querySelector(`.section-done[data-id="${id}"]`) ?? document.querySelector(`.step-section[data-section="${id}"]`);
   if (target) snapTo(target);
 }
 const firstOpenSection = () => (SECTION_ORDER[stage] ?? []).find(id => document.querySelector(`.step-section[data-section="${id}"]`) && !sectionComplete(id));
@@ -235,7 +250,7 @@ function snapNext(current) { if (current && sectionComplete(current)) return; co
 function showWhatsMissing(id) { showMissing[id] = true; render(); snapToNeed(id); }
 // After a panel completes: the check pops in, the next panel opens, then the finished one folds, then the page glides to the new one.
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-let justDone = null, advanceFrom = null, glideRun = 0;
+let justDone = null, advanceFrom = null, glideRun = 0, wasOnTimeStep = false;
 function advance(id) { advanceFrom = id; const order = SECTION_ORDER.find(list => list.includes(id)) ?? [], next = order[order.indexOf(id) + 1]; if (next) sectionOpen[next] = true; }
 function glideTo(y, ms = 650) {
   const start = scrollY, distance = Math.max(0, y) - start, began = performance.now(), run = ++glideRun;
@@ -323,10 +338,10 @@ ${(quote(draft).assessment||quote(draft).minutes+30>240)?section('quote', 'user'
 function scheduling() {
   const q = quote(draft), available = slots(draft, bookings);
   const timeDone = sectionComplete('time');
-  return `${section('time', 'calendar', 'A time that really works.', timeDone ? `${dateLabel(draft.date)} · ${time(draft.start)}–${time(draft.start + q.minutes)}` : '', `<p>Joe works Thursdays, 1–5 PM. Allow 15 minutes for the first drive before arrival. We reserve ${duration(q.minutes)} for your services and ${BUFFER} minutes for travel and setup.</p>
-  <strong class="wf-selected-date">Selected date: ${dateLabel(draft.date)}, ${draft.date.slice(0,4)}</strong><div class="date-options" role="group" aria-label="Available Thursdays">${DEMO_DATES.map(date => `<button class="choice date-option ${draft.date === date ? confirmed.date ? 'selected' : 'preselected' : ''}"${blockedDates.includes(date) ? ' disabled title="Paused for rain"' : ''} aria-pressed="${draft.date === date}" data-action="date" data-id="${date}"><span>Thursday</span><b>${date.slice(8)}</b><small>${new Date(date+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',year:'numeric',timeZone:'UTC'})}</small></button>`).join('')}</div>
-  <span class="label">Available start times · Eastern Time${req}</span><div class="slots" data-need="time">${available.map(start => `<button class="choice slot ${draft.start === start ? 'selected' : ''}" aria-pressed="${draft.start === start}" data-action="slot" data-id="${start}"><strong>${time(start)}</strong><small>Finish ${time(start + q.minutes)}</small></button>`).join('')}</div>
-  ${available.length ? `<div class="timing">${icon('shield')}Only slots that fit your whole visit are shown.</div>` : `<div class="notice warning">${icon('clock')}<span>${q.block + BUFFER > 240 ? 'This combination plus travel needs more than Joe’s four-hour work window. Remove a service or request an assessment to split the work.' : 'No time fits your visit on this date. Try another Thursday or adjust your services.'}</span></div>`}
+  return `${section('time', 'calendar', 'A time that really works.', timeDone ? `${dateLabel(draft.date)} · ${time(draft.start)}–${time(draft.start + q.minutes)}` : '', `<p>Joe’s hours change day to day. Pick a day to see the start times that fit your visit.</p>
+  ${weekPicker()}
+  ${!dayChosen() ? `<div class="notice pick-day-note">${icon('calendar')}<span>Pick a day to see Joe’s open times.</span></div>` : `<strong class="wf-selected-date">${dateLabel(draft.date)}${hoursFor(draft.date) ? ` · Joe works ${hoursRange(hoursFor(draft.date))}` : ''}</strong><span class="label">Available start times · Eastern Time${req}</span><div class="slots" data-need="time">${available.map(start => `<button class="choice slot ${draft.start === start ? 'selected' : ''}" aria-pressed="${draft.start === start}" data-action="slot" data-id="${start}"><strong>${time(start)}</strong><small>Finish ${time(start + q.minutes)}</small></button>`).join('')}</div>
+  ${available.length ? `<div class="timing">${icon('shield')}Only slots that fit your whole visit are shown.</div>` : `<div class="notice warning">${icon('clock')}<span>${q.block + BUFFER > 240 ? 'This combination plus travel needs more than Joe’s four-hour work window. Remove a service or request an assessment to split the work.' : 'No time fits your visit on this date. Try another day or adjust your services.'}</span></div>`}`}
   ${draft.start !== null ? `<div class="notice">${icon('check')}<span>Your services: ${time(draft.start)}–${time(draft.start + q.minutes)}.<br>Calendar protected until ${time(draft.start + q.block)} with the buffer.</span></div>` : ''}
   ${draft.services.some(id => FALL_PROMO.rates[id]) && !inFallPromo(draft.date) ? '<div class="notice warning">The fall promotion covers September–November visits. Your total shows regular prices for this date.</div>' : ''}${doneButton('time')}`)}
   ${section('contact', 'user', 'Who should Joe expect?', esc([draft.name, draft.email, draft.phone].join(' · ')), `<p>Sample details are filled in for Mary. Use fictional information in this demo.</p><div class="fields"><div data-need="name" class="field wide"><label for="name">Name${req}</label><input id="name" required autocomplete="off" data-field="name" value="${esc(draft.name)}" maxlength="80"></div><div data-need="email" class="field"><label for="email">Email${req}</label><input id="email" required autocomplete="off" type="email" data-field="email" value="${esc(draft.email)}" maxlength="120"></div><div data-need="phone" class="field"><label for="phone">Phone${req}</label><input id="phone" required autocomplete="off" type="tel" data-field="phone" value="${esc(draft.phone)}" maxlength="30"></div><div class="field wide"><label for="notes">Anything Joe should know? <span class="hint">Optional</span></label><textarea id="notes" data-field="notes" maxlength="500" placeholder="e.g. I have a dog, but he’s harmless">${esc(draft.notes)}</textarea></div></div>${doneButton('contact')}`)}`;
@@ -353,7 +368,7 @@ function bill(q, withAction = false) {
   ${error ? `<div class="error" role="alert">${esc(error)}</div>` : ''}
   ${withAction ? `<button class="btn full" data-action="${needsQuote?'wf-request-quote':'next'}"${continueBlocked(q) ? ' disabled' : ''}>${needsQuote?'Request an owner quote':stage === 0 ? 'Find a time' : stage === 1 ? 'Review my visit' : 'Confirm demo booking'} ${icon(stage === 2 ? 'check' : 'arrow')}</button>${stage > 0 ? '<button class="text-btn" style="margin-top:9px" data-action="previous">← Back a step</button>' : ''}<div class="summary-foot">${stage === 2 ? 'Creates a demo booking in this browser.<br>No card needed. No message is sent.' : 'A clear price, before you commit.<br>Sample dates and fictional properties.'}</div>` : ''}</section></aside>`;
 }
-function booking() { const q=quote(draft),needsQuote=q.assessment||q.minutes+30>240;return `<button class="text-btn back-btn" data-action="${stage?'previous':'home'}">${icon('back')}${stage?'Back a step':'Back to services'}</button><div class="eyebrow">ONE VISIT · ${draft.services.length} SERVICE${draft.services.length===1?'':'S'} · ONE TRAVEL CHARGE</div><h1>${['Let’s plan your visit.','Find your Thursday.','Good to go?'][stage]}</h1>${stepper()}<div class="booking-layout"><div>${stage===0?scope():stage===1?scheduling():review()}</div>${bill(q,true)}</div><div class="mobile-book-strip"><button class="price-trigger" id="mobile-price-trigger" data-action="price-breakdown" aria-haspopup="dialog" aria-label="View price breakdown, total ${money(q.total)}"><small>${needsQuote?'Scope estimate':'Your visit total'}</small><strong>${money(q.total)}</strong><span>View breakdown ${icon('plus')}</span></button><button class="btn" data-action="${needsQuote?'wf-request-quote':'next'}"${continueBlocked(q)?' disabled':''}>${needsQuote?'Request quote':stage===2?'Confirm demo booking':'Continue'} ${icon('arrow')}</button></div>`; }
+function booking() { const q=quote(draft),needsQuote=q.assessment||q.minutes+30>240;return `<button class="text-btn back-btn" data-action="${stage?'previous':'home'}">${icon('back')}${stage?'Back a step':'Back to services'}</button><div class="eyebrow">ONE VISIT · ${draft.services.length} SERVICE${draft.services.length===1?'':'S'} · ONE TRAVEL CHARGE</div><h1>${['Let’s plan your visit.','Find your time.','Good to go?'][stage]}</h1>${stepper()}<div class="booking-layout"><div>${stage===0?scope():stage===1?scheduling():review()}</div>${bill(q,true)}</div><div class="mobile-book-strip"><button class="price-trigger" id="mobile-price-trigger" data-action="price-breakdown" aria-haspopup="dialog" aria-label="View price breakdown, total ${money(q.total)}"><small>${needsQuote?'Scope estimate':'Your visit total'}</small><strong>${money(q.total)}</strong><span>View breakdown ${icon('plus')}</span></button><button class="btn" data-action="${needsQuote?'wf-request-quote':'next'}"${continueBlocked(q)?' disabled':''}>${needsQuote?'Request quote':stage===2?'Confirm demo booking':'Continue'} ${icon('arrow')}</button></div>`; }
 
 function bookingDetails(b) { return `<div class="review-row">${icon('calendar')}<span><strong>${dateLabel(b.draft.date)} · ${time(b.draft.start)}–${time(b.draft.start + b.minutes)}</strong><small>Eastern Time · ${duration(b.minutes)} of service</small></span></div><div class="review-row">${icon('pin')}<span>${esc(b.draft.property)}<small>${AREAS[b.draft.area]?.name || 'Demo area'}</small></span></div><div class="review-row">${icon('bag')}<span>${b.lines.map(l => `<span style="display:block">${esc(l.name)} <small>${esc(l.details)}</small></span>`).join('')}</span></div><div class="bill-total"><span>Confirmed demo price</span><strong>${money(b.total)}</strong></div>`; }
 function confirmation() {
@@ -391,14 +406,14 @@ function dialogContent() {
     content = `<h2 id="dialog-title">Keep your demo booking.</h2><p>Anyone with this link can read its sample booking details. Use fictional information only. This is a portable demo snapshot, not a live, authenticated booking.</p><div class="field"><label for="share-link">Portable demo link</label><textarea id="share-link" rows="4" readonly>${esc(link)}</textarea></div><div class="notice warning">Changes made after creating this link won’t update copies opened elsewhere.</div><button class="btn full" style="margin-top:17px" data-action="copy-link">${icon('link')}Copy demo link</button><p id="copy-status" role="status" style="margin-top:10px"></p>`;
   } else if (dialog.type === 'reschedule' && b) {
     const proposed = { ...b.draft, date: dialog.date }, q = quote(proposed), available = slots(proposed, bookings, b.id);
-    content = `<h2 id="dialog-title">Find a fresh Thursday.</h2><p>Move this visit to a time that fits. The price recalculates for the new service date.</p><div class="field"><label for="move-date">New date</label><select id="move-date" data-field="moveDate">${DEMO_DATES.map(d => `<option value="${d}"${selected(d === dialog.date)}>${dateLabel(d)}</option>`).join('')}</select></div><div class="field"><label for="move-time">Available start time · Eastern Time</label><select id="move-time" data-field="moveTime"><option value="">Choose a time</option>${available.map(t => `<option value="${t}"${selected(t === dialog.start)}>${time(t)} · finish ${time(t + q.minutes)}</option>`).join('')}</select></div>${!available.length ? '<div class="notice warning">No time fits this visit on this date. Try another Thursday.</div>' : ''}<div class="bill-total"><span>Updated demo total</span><strong>${money(q.total)}</strong></div>${q.total !== b.total ? '<div class="notice warning">Your discount changes with the service date. Confirming accepts the updated demo price.</div>' : ''}${error ? `<div class="error" role="alert">${esc(error)}</div>` : ''}<button class="btn full" data-action="save-reschedule"${dialog.start === null ? ' disabled' : ''}>Confirm new demo appointment</button><p style="margin-top:12px">Live customer approval and weather notifications require a backend. No messages are sent here.</p>`;
+    content = `<h2 id="dialog-title">Find a fresh time.</h2><p>Move this visit to a time that fits. The price recalculates for the new service date.</p><div class="field"><label for="move-date">New date</label><select id="move-date" data-field="moveDate">${DEMO_DATES.map(d => `<option value="${d}"${selected(d === dialog.date)}>${dateLabel(d)}</option>`).join('')}</select></div><div class="field"><label for="move-time">Available start time · Eastern Time</label><select id="move-time" data-field="moveTime"><option value="">Choose a time</option>${available.map(t => `<option value="${t}"${selected(t === dialog.start)}>${time(t)} · finish ${time(t + q.minutes)}</option>`).join('')}</select></div>${!available.length ? '<div class="notice warning">No time fits this visit on this date. Try another day.</div>' : ''}<div class="bill-total"><span>Updated demo total</span><strong>${money(q.total)}</strong></div>${q.total !== b.total ? '<div class="notice warning">Your discount changes with the service date. Confirming accepts the updated demo price.</div>' : ''}${error ? `<div class="error" role="alert">${esc(error)}</div>` : ''}<button class="btn full" data-action="save-reschedule"${dialog.start === null ? ' disabled' : ''}>Confirm new demo appointment</button><p style="margin-top:12px">Live customer approval and weather notifications require a backend. No messages are sent here.</p>`;
   } else if (dialog.type === 'cancel' && b) {
     content = `<h2 id="dialog-title">Cancel this demo visit?</h2><p>${dateLabel(b.draft.date)} at ${time(b.draft.start)}. This releases its local calendar slot. No payment or message is involved.</p><div class="btn-row"><button class="btn secondary" data-action="close-dialog">Keep my visit</button><button class="btn" data-action="confirm-cancel" data-id="${esc(b.id)}">Cancel demo visit</button></div>`;
   } else if (dialog.type === 'hours') {
     const s = hoursStatus(), today = easternNow().day;
     content = `<h2 id="dialog-title">Hours</h2><p><strong class="${s.open ? 'is-open' : 'is-closed'}">${s.label}</strong>${s.detail ? ` · ${s.detail}` : ''}</p><table class="hours-table"><tbody>${WEEKDAYS.map((day, i) => `<tr${i === today ? ' class="today"' : ''}><th scope="row">${day}</th><td>${hoursRange(HOURS[i])}</td></tr>`).join('')}</tbody></table><p class="hours-note">Eastern Time</p>`;
   } else if (dialog.type === 'contact') {
-    content = '<h2 id="dialog-title">A real person, when you need one.</h2><p>Joe’s Landscaping · East Providence, RI<br>Demo phone: 401-555-0142<br>Thursdays, 1–5 PM</p><div class="notice">This is a fictional business contact. No call is placed from this prototype.</div>';
+    content = '<h2 id="dialog-title">A real person, when you need one.</h2><p>Joe’s Landscaping · East Providence, RI<br>Demo phone: 401-555-0142<br>' + HOURS.map((h, i) => h ? `${WEEKDAYS[i].slice(0, 3)} ${hoursRange(h)}` : '').filter(Boolean).join(' · ') + '</p><div class="notice">This is a fictional business contact. No call is placed from this prototype.</div>';
   }
   return `<div class="dialog-backdrop ${dialog.type==='price-breakdown'?'price-sheet':''}"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><div class="dialog-head"><span class="eyebrow">JOE’S LANDSCAPING</span><button class="icon-btn" data-action="close-dialog" aria-label="Close dialog">${icon('close')}</button></div>${content}${error && dialog.type !== 'reschedule' ? `<div class="error" role="alert">${esc(error)}</div>` : ''}</section></div>`;
 }
@@ -406,10 +421,12 @@ function render() {
   const focused = document.activeElement?.id;headerObserver?.disconnect();if(ownerViews.includes(view)&&DEMO_DATES.includes(ownerDate))try{sessionStorage.setItem('business-hq-workday',ownerDate);}catch{}
   app.innerHTML = shell(`${ownerViews.includes(view)?wf.nav(view):''}${error&&!dialog&&['studio','quotes','jobs','plans','manage','bookings','field-job','field-add','field-tasks','field-kit','field-customers'].includes(view)?`<div class="error" role="alert">${esc(error)}</div>`:''}`+(view === 'home' ? home() : view === 'repeat' ? repeatExperience({ bookings, propertyId: repeatPropertyId, icon, esc }) : view === 'book' ? booking() : view === 'confirmation' ? confirmation() : view === 'owner' ? owner() : view==='manage'?hq.business():view.startsWith('field-')?hq.render(view):['studio','quotes','jobs','plans'].includes(view)?wf.render(view):myBookings()));
   const header=document.querySelector('.topbar');if(header){const measure=()=>document.documentElement.style.setProperty('--header-height',header.getBoundingClientRect().height+'px');measure();if(typeof ResizeObserver!=='undefined'){headerObserver=new ResizeObserver(measure);headerObserver.observe(header);}}
-  const dates=document.querySelector('.date-options'), selectedDate=dates?.querySelector('.selected');if(dates&&selectedDate)dates.scrollLeft=selectedDate.offsetLeft;
   if (focusMain) { document.querySelector('#main').focus({preventScroll:true}); window.scrollTo({top:0,behavior:'instant'}); focusMain = false; }
   else if (focused) document.getElementById(focused)?.focus({preventScroll:true});
   applyNeeds();
+  const onTimeStep = view === 'book' && stage === 1;
+  if (onTimeStep && !wasOnTimeStep && !dialog) { const panel = document.querySelector('.step-section[data-section="time"]:not(.done)'); if (panel) scrollTo(0, scrollY + panel.getBoundingClientRect().top - headerOffset()); }
+  wasOnTimeStep = onTimeStep;
 }
 function openDialog(value) { dialogReturnId=document.activeElement?.id||null;dialog = value; error = ''; render(); document.querySelector('.dialog button')?.focus(); }
 function encode(value) { const bytes = new TextEncoder().encode(JSON.stringify(value)); return btoa(Array.from(bytes, b => String.fromCharCode(b)).join('')).replaceAll('+','-').replaceAll('/','_').replace(/=+$/, ''); }
@@ -461,7 +478,8 @@ document.addEventListener('click', async event => {
   if (action === 'haul') { confirmChoices('haul'); draft.haul = id === 'yes'; draft.start = null; error = ''; render(); announce(`Price updated to ${money(quote(draft).total)}`); snapNext('details'); return; }
   if (action === 'stories') { confirmChoices('stories'); draft.stories = Number(id); draft.start = null; error = ''; render(); announce(`Price updated to ${money(quote(draft).total)}`); snapNext('details'); return; }
   if (action === 'size') { confirmChoices('size'); draft.size = id; draft.start = null; error = ''; render(); announce(`Price updated to ${money(quote(draft).total)}`); snapNext('details'); }
-  if (action === 'date') { sectionState(); confirmed.time=false; confirmed.date=true; draft.date=id; draft.start=null; error=''; render(); snapNext('time'); }
+  if (action === 'week-shift') { if (id) { bookingWeek = id; render(); } return; }
+  if (action === 'date') { sectionState(); confirmed.time=false; confirmed.date=true; draft.date=id; draft.start=null; error=''; render(); }
   if (action === 'pick-property') { useProperty(draft, id === 'new' ? null : myProperties().find(p => p.id === id)); sectionState(); confirmed.picked = true; confirmed.place = id !== 'new'; if (id !== 'new') advance('place'); editingProperty = null; draft.start = null; error = ''; render(); if (id === 'new') snapNext('place'); advanceFrom = null; return; }
   if (action === 'edit-property') { const p = myProperties().find(p => p.id === id); editingProperty = p ? { id, address: p.address, city: p.city, state: p.state, access: p.access ?? '' } : null; render(); document.querySelector('#edit-address')?.focus(); return; }
   if (action === 'cancel-property') { editingProperty = null; render(); return; }
@@ -477,7 +495,7 @@ document.addEventListener('click', async event => {
   if (action === 'home-continue') { if (!homePick.length) return; const picked = [...homePick]; homePick = []; startBooking(picked[0]); draft.services = picked; confirmChoices('picked_services', 'services'); render(); snapNext(); return; }
   if (action === 'service-filter') { serviceCategory = id; if (id === 'all') serviceQuery = ''; render(); document.querySelector('.filter-chip.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); return; }
   if (action === 'toggle-section') { sectionOpen[id] = !(sectionOpen[id] ?? false); render(); return; }
-  if (action === 'slot') { confirmChoices('date'); draft.start=Number(id); error=''; render(); snapNext('time'); }
+  if (action === 'slot') { confirmChoices('date'); draft.start=Number(id); error=''; render(); }
   if (action === 'edit') { stage=Number(id); error=''; focusMain=true; render(); }
   if (action === 'previous') { stage=Math.max(0,stage-1);error='';focusMain=true;render(); }
   if (action === 'next') {

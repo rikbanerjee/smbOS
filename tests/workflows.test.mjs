@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {DEFAULT_RULES,getRules,publishRules,visibleQuestions} from '../rules.js?v=combined-11';
-import {defaultDraft,quote,slots,validBooking} from '../model.js?v=combined-11';
-import {sampleDay} from '../operations.js?v=combined-11';
+import {DEFAULT_RULES,getRules,publishRules,visibleQuestions} from '../rules.js?v=combined-12';
+import {defaultDraft,quote,slots,validBooking} from '../model.js?v=combined-12';
+import {sampleDay} from '../operations.js?v=combined-12';
 import * as w from '../workflow-model.js';
 
 test('conditional answers affect price, time and preparation only while visible',()=>{

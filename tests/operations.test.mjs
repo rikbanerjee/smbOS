@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEMO_DATES, defaultDraft, quote, slots, validBooking } from '../model.js?v=combined-11';
+import { DEMO_DATES, defaultDraft, quote, slots, validBooking } from '../model.js?v=combined-12';
 import { PROPERTIES, propertyHistory, repeatDraft, packingList, dayPlan, readiness, sampleDay, proposeRainPlan, approveRainPlan, respondToRainChange } from '../operations.js';
 
 test('repeat booking recalls the property and scope but recalculates current pricing', () => {
@@ -44,7 +44,7 @@ test('slots include first and final travel and reject unsupported days/scopes', 
   const d = { ...defaultDraft(), services: ['leaves', 'gutters'] };
   assert.deepEqual(slots(d), [795]);
   assert.deepEqual(slots({ ...d, haul: true }), []);
-  assert.deepEqual(slots({ ...d, date: '2026-10-30' }), []);
+  assert.deepEqual(slots({ ...d, date: '2026-11-03' }), []); // Joe is off Tuesdays
   assert.deepEqual(slots({ ...d, area: 'outside' }), []);
   assert.deepEqual(slots({ ...d, stories: 3 }), []);
   assert.equal(quote(d).travel, 48);
@@ -59,10 +59,10 @@ test('rain proposals preserve original appointments and independently allocate b
   assert.equal(pending[0].draft.date, originals[0].draft.date);
   assert.equal(pending[0].status, 'confirmed');
   assert.equal(pending[0].pendingChange.status, 'awaiting_customer');
-  assert.equal(pending[0].pendingChange.draft.date, '2026-11-05');
+  assert.equal(pending[0].pendingChange.draft.date, '2026-10-30');
   assert.ok(pending[1].pendingChange.draft.start >= pending[0].pendingChange.draft.start + quote(pending[0].pendingChange.draft).block);
   assert.equal(readiness(pending[0]).ready, false);
-  const proposedDay = dayPlan(pending, '2026-11-05');
+  const proposedDay = dayPlan(pending, '2026-10-30');
   assert.equal(proposedDay.holds.length, 2);
   assert.equal(proposedDay.visits.length, 0);
   assert.equal(proposedDay.next, null);
@@ -75,14 +75,14 @@ test('proposed holds block other customers, while the rain day can be paused', (
   assert.deepEqual(slots(defaultDraft(), pending, null, ['2026-10-29']), []);
 });
 test('customer acceptance updates the slot and explicit price, then releases the original', () => {
-  const visits = sampleDay(); for(const b of visits){b.draft.date='2026-11-26';Object.assign(b,quote(b.draft));} const plan = proposeRainPlan(visits, visits[0].draft.date);
+  const visits = sampleDay(); for(const b of visits){b.draft.date='2026-11-26';Object.assign(b,quote(b.draft));} const plan = proposeRainPlan(visits, visits[0].draft.date, ['2026-11-27','2026-11-30']);
   const pending = approveRainPlan(visits, plan);
   const gutter = pending[1];
   assert.equal(gutter.total, 156);
   assert.equal(gutter.pendingChange.total, 168);
   const accepted = respondToRainChange(pending, gutter.id, true);
   const changed = accepted.find(b => b.id === gutter.id);
-  assert.equal(changed.draft.date, '2026-12-03');
+  assert.equal(changed.draft.date, '2026-12-02');
   assert.equal(changed.total, 168);
   assert.equal(changed.pendingChange, undefined);
   assert.equal(changed.previousAppointments[0].date, '2026-11-26');
@@ -122,4 +122,14 @@ test('a new rain plan does not repeat the exact slot a customer already declined
   assert.ok(replacement);
   assert.ok(replacement.draft.date !== firstPlan.proposals[0].draft.date || replacement.draft.start !== firstPlan.proposals[0].draft.start);
   assert.throws(() => approveRainPlan(declined, firstPlan), /calendar changed/);
+});
+test('each working day offers slots inside its own hours, and a booking cannot cross them', () => {
+  const d = { ...defaultDraft(), services: ['mowing'], size: 'small' };
+  assert.equal(slots({ ...d, date: '2026-11-02' })[0], 555); // Monday opens 9 AM, first drive 15 minutes
+  assert.equal(slots({ ...d, date: '2026-11-04' })[0], 795); // Wednesday opens 1 PM
+  assert.equal(slots({ ...d, date: '2026-11-06' })[0], 495); // Friday opens 8 AM
+  const friday = slots({ ...d, date: '2026-11-06' }), q = quote({ ...d, date: '2026-11-06' });
+  assert.ok(friday.every(start => start + q.block <= 720));
+  assert.ok(validBooking({ ...d, date: '2026-11-06', start: 795 }).includes('no longer fits'));
+  assert.ok(DEMO_DATES.every(date => slots({ ...d, date }).length > 0));
 });

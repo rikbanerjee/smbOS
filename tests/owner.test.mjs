@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as f from '../owner-model.js?v=combined-11';
-import {sampleDay,respondToRainChange} from '../operations.js?v=combined-11';
-import {freshWork,proposeExtra,invoiceFor,recordPayment,balance} from '../workflow-model.js?v=combined-11';
-import {defaultDraft,validBooking,slots} from '../model.js?v=combined-11';
+import * as f from '../owner-model.js?v=combined-12';
+import {sampleDay,respondToRainChange} from '../operations.js?v=combined-12';
+import {freshWork,proposeExtra,invoiceFor,recordPayment,balance} from '../workflow-model.js?v=combined-12';
+import {defaultDraft,validBooking,slots} from '../model.js?v=combined-12';
 
 test('load-up readiness preserves checked quantities and surfaces shortages and unavailable equipment',()=>{
  const visits=sampleDay(),desk=f.freshDesk();desk.stock['Leaf bags']=4;desk.unavailable=['Rake'];

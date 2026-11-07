@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {defaultDraft,quote,FALL_PROMO,LEGACY_PROMO,money,hoursStatus,hoursRange,easternNow,inFallPromo,fallPromoEnds} from '../model.js?v=combined-11';
-import {PROPERTIES,recentServices,recentDraft,sampleDay,repeatDraft} from '../operations.js?v=combined-11';
-import {getRules,publishRules,DEFAULT_RULES} from '../rules.js?v=combined-11';
-import * as w from '../workflow-model.js?v=combined-11';
+import {defaultDraft,quote,FALL_PROMO,LEGACY_PROMO,money,hoursStatus,hoursRange,easternNow,inFallPromo,fallPromoEnds} from '../model.js?v=combined-12';
+import {PROPERTIES,recentServices,recentDraft,sampleDay,repeatDraft} from '../operations.js?v=combined-12';
+import {getRules,publishRules,DEFAULT_RULES} from '../rules.js?v=combined-12';
+import * as w from '../workflow-model.js?v=combined-12';
 const legacy=()=>{const draft={...defaultDraft(),size:'small',propertyId:'mary-home'};delete draft.promotionSnapshot;return {id:'JHQ-LEGACY01',draft:{...draft,start:795},...quote(draft),status:'confirmed'};};
 
 test('combined November visits apply per-service discounts, one travel charge, and correct December prices',()=>{
@@ -55,12 +55,12 @@ test('a fresh repeat visit uses the current promotion, while its source remains 
 });
 test('opening status handles before, during, and after Thursday hours in Eastern time',()=>{
  assert.equal(hoursStatus({day:4,minutes:779}).detail,'Opens 1 PM');assert.equal(hoursStatus({day:4,minutes:780}).open,true);assert.equal(hoursStatus({day:4,minutes:1020}).open,false);
- assert.equal(hoursStatus({day:0,minutes:900}).detail,'Opens 1 PM Thursday');assert.equal(hoursRange([780,1020]),'1–5 PM');assert.equal(hoursRange([450,870]),'7:30 AM–2:30 PM');
+ assert.equal(hoursStatus({day:0,minutes:900}).detail,'Opens 9 AM Monday');assert.equal(hoursRange([780,1020]),'1–5 PM');assert.equal(hoursRange([450,870]),'7:30 AM–2:30 PM');
  assert.deepEqual(easternNow(new Date('2026-11-05T18:00:00Z')),{day:4,minutes:780});
 });
 
 test('travel zone comes from the served city and state, and nothing else',async()=>{
- const {areaForCity}=await import('../model.js?v=combined-11');
+ const {areaForCity}=await import('../model.js?v=combined-12');
  assert.equal(areaForCity('Riverside','RI'),'riverside');assert.equal(areaForCity(' east providence ','ri'),'east');
  assert.equal(areaForCity('Riverside','MA'),'outside');assert.equal(areaForCity('Boston','RI'),'outside');assert.equal(areaForCity(),'outside');
 });
