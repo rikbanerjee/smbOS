@@ -1,6 +1,7 @@
-import {SERVICES,DEMO_DATES,freshPromotion,defaultDraft,quote,money,duration,dateLabel,time,slots} from './model.js?v=combined-12';
-import {DEFAULT_RULES,getRules,publishRules,visibleQuestions,validateRules} from './rules.js?v=combined-12';
-import * as domain from './workflow-model.js?v=combined-12';
+import {clone,uuid} from './compat.js?v=v2-1';
+import {SERVICES,DEMO_DATES,freshPromotion,defaultDraft,quote,money,duration,dateLabel,time,slots} from './model.js?v=v2-1';
+import {DEFAULT_RULES,getRules,publishRules,visibleQuestions,validateRules} from './rules.js?v=v2-1';
+import * as domain from './workflow-model.js?v=v2-1';
 export const WORK_STORE='business-hq-workflows-v3',RULE_STORE='business-hq-rules-v3';
 export function loadPublished(){try{const saved=localStorage.getItem(RULE_STORE);if(saved)publishRules(JSON.parse(saved));}catch{ /* Use the standard catalog when saved rules cannot be loaded. */ }}
 export function createWorkflows(ctx){
@@ -82,7 +83,7 @@ export function createWorkflows(ctx){
       if(action==='wf-customer-preview'){ctx.navigate('home');ctx.announce('You are viewing the customer page. Use Joe’s workspace to return to My day.');return true;}
       if(action==='wf-edit-service'){service=id;preview={...defaultDraft(),size:'small'};}
       if(action==='wf-add-question'){studioDirty=true;questionsOpen=true;}
-      if(action==='wf-add-question')editor[service].questions.push({key:'question-'+crypto.randomUUID().slice(0,6),label:'Does this visit need extra care?',type:'select',required:false,options:['no','yes'],default:'no',when:'',equals:'yes',price:10,minutes:15,prep:'Additional supplies'});
+      if(action==='wf-add-question')editor[service].questions.push({key:'question-'+uuid().slice(0,6),label:'Does this visit need extra care?',type:'select',required:false,options:['no','yes'],default:'no',when:'',equals:'yes',price:10,minutes:15,prep:'Additional supplies'});
       if(action==='wf-remove-question'){studioDirty=true;const removed=editor[service].questions[Number(id)];editor[service].questions=editor[service].questions.filter(q=>q.key!==removed.key&&q.when!==removed.key);}
       if(action==='wf-publish'){validateRules(editor);publishRules(editor);localStorage.setItem(RULE_STORE,JSON.stringify(editor));studioDirty=false;ctx.announce('Your services and prices are saved. New visits will use these details.');}
       if(action==='wf-try-published'){ctx.startDraft({...defaultDraft(),services:[service]},0);return true;}
@@ -103,7 +104,7 @@ export function createWorkflows(ctx){
       if(action==='wf-pause-plan'){commit(domain.pauseRepeat(work,ctx.getBookings(),id));ctx.announce('Repeat plan paused. Eligible unstarted visits were released.');}
       if(action==='wf-seasonal'){if(!work.seasonal.some(s=>s.bookingId===id)){work.seasonal.push({id:domain.uid('SEA'),bookingId:id,active:true});save();}ctx.navigate('bookings');ctx.announce('Seasonal reminder saved in this browser.');return true;}
       if(action==='wf-toggle-seasonal'){const s=work.seasonal.find(s=>s.id===id);s.active=!s.active;save();}
-      if(action==='wf-rebook-seasonal'){const draft={...structuredClone(b.draft),catalogSnapshot:getRules(),promotionSnapshot:freshPromotion(),date:'2027-10-28',start:null,extraWork:[],approvedOffer:undefined};ctx.startDraft(draft,0);return true;}
+      if(action==='wf-rebook-seasonal'){const draft={...clone(b.draft),catalogSnapshot:getRules(),promotionSnapshot:freshPromotion(),date:'2027-10-28',start:null,extraWork:[],approvedOffer:undefined};ctx.startDraft(draft,0);return true;}
       ctx.render();return true;
     }catch(err){ctx.error(err.message);ctx.render();return true;}
   }

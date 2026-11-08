@@ -1,4 +1,5 @@
-import { DEFAULT_RULES, getRules, effects } from './rules.js?v=combined-12';
+import {clone} from './compat.js?v=v2-1';
+import { DEFAULT_RULES, getRules, effects } from './rules.js?v=v2-1';
 export const SERVICES = {
   leaves: { name: 'Fall leaf cleanup', category: 'Lawn & yard', icon: 'leaf', description: 'A fresh start for your lawn, beds, and walkways.', base: 150, minutes: 90, tools: ['Leaf blower', 'Rake', 'Leaf bags', 'Gloves'] },
   gutters: { name: 'Gutter cleaning', category: 'Home exterior', icon: 'house', description: 'Clear gutters. Flowing downspouts. Ready for the rain.', base: 120, minutes: 90, tools: ['Ladder', 'Gutter scoop', 'Hose', 'Safety equipment'] },
@@ -11,6 +12,16 @@ export function areaForCity(city = '', state = '') {
   const name = city.trim().toLowerCase(), st = state.trim().toUpperCase();
   if (st && st !== 'RI') return 'outside';
   return Object.keys(AREAS).find(id => AREAS[id].miles !== null && AREAS[id].name.toLowerCase() === name) ?? 'outside';
+}
+// ZIP codes Joe serves. A ZIP sets the travel zone, city, and state, so customers type only a street.
+export const ZIP_AREAS = { '02914': 'east', '02916': 'east', '02915': 'riverside' };
+export const validZipCode = zip => /^\d{5}$/.test(String(zip ?? '').trim());
+// { zip, area, city, state, served } for a 5-digit ZIP, or null when it isn't one.
+export function placeForZip(zip = '') {
+  const z = String(zip).trim();
+  if (!validZipCode(z)) return null;
+  const area = ZIP_AREAS[z] ?? 'outside';
+  return area === 'outside' ? { zip: z, area, city: '', state: '', served: false } : { zip: z, area, city: AREAS[area].name, state: 'RI', served: true };
 }
 // Joe's sample hours by weekday (0 = Sunday), in minutes after midnight Eastern; null = closed.
 // Each window is four hours because quote() sends longer visits to an owner review on that basis.
@@ -27,7 +38,7 @@ export const BUFFER = 15;
 export const FALL_PROMO = { name: 'Fall seasonal promotion', months: [9, 10, 11], rates: { gutters: 0.10, leaves: 0.15 } };
 // Existing bookings without a snapshot retain the policy they were booked under.
 export const LEGACY_PROMO = {name:'October gutter special',months:[10],rates:{gutters:0.10},start:'2026-10-01',end:'2026-10-31'};
-export const freshPromotion = () => structuredClone(FALL_PROMO);
+export const freshPromotion = () => clone(FALL_PROMO);
 export function promotionActive(date,policy){return !!policy&&policy.months.includes(Number(String(date).slice(5,7)))&&(!policy.start||date>=policy.start)&&(!policy.end||date<=policy.end);}
 export const inFallPromo = date => promotionActive(date,FALL_PROMO);
 const cents=n=>Math.round(n*100)/100;

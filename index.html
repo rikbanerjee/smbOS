@@ -1,14 +1,41 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#285a43">
   <meta name="description" content="A working Business HQ prototype: clear prices, real capacity, easy repeat bookings, and a prepared business owner.">
   <title>Joe’s Landscaping · Business HQ prototype</title>
-  <link rel="stylesheet" href="./styles.css?v=combined-12">
-  <link rel="stylesheet" href="./readability.css?v=combined-12">
-  <link rel="stylesheet" href="./owner.css?v=combined-12">
-  <script type="module" src="./app.js?v=combined-12"></script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23285a43'/%3E%3Cpath d='M9 23c0-9 6-14 15-14 0 9-5 15-14 15m0-1 8-8' fill='none' stroke='%23eaf3ce' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="preload" href="./fonts/dm-sans-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="./fonts/manrope-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="./styles.css?v=v2-1">
+  <link rel="stylesheet" href="./readability.css?v=v2-1">
+  <link rel="stylesheet" href="./owner.css?v=v2-1">
+  <link rel="stylesheet" href="./v2.css?v=v2-1">
+  <script>
+    // Safety net: if anything fails while loading or running, show a reload bar instead of a dead page.
+    (function () {
+      var shown = false;
+      function bar(message) {
+        if (shown || !document.body) return; shown = true;
+        var el = document.createElement('div'); el.className = 'app-error'; el.setAttribute('role', 'alert');
+        el.innerHTML = '<span>' + message + '</span><button type="button">Reload</button>';
+        el.querySelector('button').onclick = function () { location.reload(); };
+        document.body.appendChild(el);
+      }
+      window.addEventListener('error', function (event) {
+        var t = event.target;
+        if (t && t !== window && t.tagName !== 'SCRIPT') return; // a missing image is not a broken page
+        bar('Something went wrong on this page.');
+      }, true);
+      window.addEventListener('unhandledrejection', function () { bar('Something went wrong on this page.'); });
+      window.addEventListener('load', function () {
+        setTimeout(function () { var app = document.getElementById('app'); if (app && !app.children.length) bar('The demo didn’t load in this browser.'); }, 4000);
+      });
+    })();
+  </script>
+  <script type="module" src="./app.js?v=v2-1"></script>
+  <script nomodule>document.addEventListener('DOMContentLoaded', function () { document.getElementById('app').innerHTML = '<p class="app-unsupported">This browser is too old for the Joe’s Landscaping demo. Update the phone’s software, or open the link in Chrome or Safari.</p>'; });</script>
 </head>
 <body><a class="skip" href="#main">Skip to content</a><div id="app"></div><div id="announcement" class="sr-only" aria-live="polite"></div></body>
 </html>

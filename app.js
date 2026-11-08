@@ -1,10 +1,11 @@
-import {createFieldDesk} from './owner-hq.js?v=combined-12';
-import {calendarControls,calendarOverview,shiftPeriod,weekDates} from './calendar.js?v=combined-12';
-import {DEFAULT_RULES,getRules,visibleQuestions} from './rules.js?v=combined-12';
-import {createWorkflows,loadPublished,WORK_STORE,RULE_STORE} from './workflow-ui.js?v=combined-12';
-import { SERVICES, AREAS, DEMO_DATES, BUFFER, FALL_PROMO, LEGACY_PROMO, freshPromotion, inFallPromo, fallPromoEnds, HOURS, WEEKDAYS, hoursFor, shortHours, hoursRange, hoursStatus, easternNow, money, duration, time, dateLabel, defaultDraft, areaForCity, quote, slots as modelSlots, validBooking as modelValidBooking } from './model.js?v=combined-12';
-import { PROPERTIES, propertyHistory, recentServices, repeatDraft, recentDraft, packingList, sampleDay, proposeRainPlan, approveRainPlan, respondToRainChange, readiness } from './operations.js?v=combined-12';
-import { repeatExperience, providerDay, weatherReview, customerWeatherCard } from './experience.js?v=combined-12';
+import {clone,last,copyText} from './compat.js?v=v2-1';
+import {createFieldDesk} from './owner-hq.js?v=v2-1';
+import {calendarControls,calendarOverview,shiftPeriod,weekDates} from './calendar.js?v=v2-1';
+import {DEFAULT_RULES,getRules,visibleQuestions} from './rules.js?v=v2-1';
+import {createWorkflows,loadPublished,WORK_STORE,RULE_STORE} from './workflow-ui.js?v=v2-1';
+import { SERVICES, AREAS, DEMO_DATES, BUFFER, FALL_PROMO, LEGACY_PROMO, freshPromotion, inFallPromo, fallPromoEnds, HOURS, WEEKDAYS, hoursFor, shortHours, hoursRange, hoursStatus, easternNow, money, duration, time, dateLabel, defaultDraft, areaForCity, placeForZip, validZipCode, quote, slots as modelSlots, validBooking as modelValidBooking } from './model.js?v=v2-1';
+import { PROPERTIES, propertyHistory, recentServices, repeatDraft, recentDraft, packingList, sampleDay, proposeRainPlan, approveRainPlan, respondToRainChange, readiness } from './operations.js?v=v2-1';
+import { repeatExperience, providerDay, weatherReview, customerWeatherCard } from './experience.js?v=v2-1';
 
 const paths = {
   help:'<circle cx="12" cy="12" r="9"/><path d="M9.5 8.5a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 4.5m0 3h.01"/>',
@@ -42,7 +43,7 @@ const STORE = 'business-hq-prototype-v1';
 let storageAvailable = true;
 let bookings = [];
 try { bookings = JSON.parse(localStorage.getItem(STORE) || '[]').filter(b => b && typeof b.id === 'string' && b.draft && Array.isArray(b.draft.services) && Number.isFinite(b.total) && Number.isFinite(b.block)); } catch { bookings = []; storageAvailable = false; }
-for(const b of bookings) { b.draft.catalogSnapshot ??= structuredClone(DEFAULT_RULES); b.draft.promotionSnapshot ??= structuredClone(LEGACY_PROMO); if(b.pendingChange){b.pendingChange.draft.catalogSnapshot ??= structuredClone(DEFAULT_RULES);b.pendingChange.draft.promotionSnapshot ??= structuredClone(LEGACY_PROMO);} }
+for(const b of bookings) { b.draft.catalogSnapshot ??= clone(DEFAULT_RULES); b.draft.promotionSnapshot ??= clone(LEGACY_PROMO); if(b.pendingChange){b.pendingChange.draft.catalogSnapshot ??= clone(DEFAULT_RULES);b.pendingChange.draft.promotionSnapshot ??= clone(LEGACY_PROMO);} }
 const ownerViews=['owner','studio','quotes','jobs','plans','manage','field-job','field-add','field-tasks','field-kit','field-customers'];
 let entryView='home';try{if(new URLSearchParams(location.search).get('view')==='owner'||new URLSearchParams(location.search).get('view')!=='customer'&&sessionStorage.getItem('business-hq-view-mode')==='owner')entryView='owner';}catch{}
 let view = entryView, stage = 0, draft = { ...defaultDraft(), propertyId: 'mary-home' }, error = '', currentId = null, ownerDate = DEMO_DATES[0], dialog = null;
@@ -61,6 +62,11 @@ try { propertyEdits = JSON.parse(localStorage.getItem(EDIT_STORE) || '{}') || {}
 // People this customer has saved, for billing and "who should Joe expect". The first one is who the app knows them as.
 const PEOPLE_STORE = 'business-hq-people-v1', MARY = { id: 'mary', type: 'person', name: 'Mary Thompson', phone: '401-555-0100', email: 'mary@example.com', company: '', billingStreet: '12 Maple Lane (fictional)', billingCity: 'East Providence', billingState: 'RI', billingZip: '02914', billingAddress: '12 Maple Lane (fictional), East Providence, RI 02914' };
 let people = [];
+// ZIP the customer checked on the home page. It fills city, state, and travel zone for a new property.
+const ZIP_STORE = 'business-hq-zip-v1', WAITLIST_STORE = 'business-hq-waitlist-v1';
+let homeZip = '', zipError = '', waitlistDone = false;
+try { homeZip = localStorage.getItem(ZIP_STORE) ?? ''; if (!validZipCode(homeZip)) homeZip = ''; } catch { homeZip = ''; }
+function setHomeZip(zip) { homeZip = zip; try { zip ? localStorage.setItem(ZIP_STORE, zip) : localStorage.removeItem(ZIP_STORE); } catch { storageAvailable = false; } }
 try {
   const saved = localStorage.getItem(PEOPLE_STORE);
   if (saved !== null) people = JSON.parse(saved).filter(p => p && typeof p.id === 'string' && typeof p.name === 'string');
@@ -80,7 +86,7 @@ const serviceProperties = () => myProperties().filter(p => !(p.billingOnly && p.
 function persistProperties() { try { localStorage.setItem(PROPERTY_STORE, JSON.stringify(addedProperties)); localStorage.setItem(EDIT_STORE, JSON.stringify(propertyEdits)); } catch { storageAvailable = false; } }
 // Fill the draft's address, access and scope details from a saved property, or clear them for a new one.
 function useProperty(d, p) {
-  if (!p) return Object.assign(d, { propertyId: 'new', property: '', city: '', state: 'RI', zip: '', area: 'outside', access: '', parking: '', notes: '', accessConfirmed: false, propertyAllowance: false });
+  if (!p) { const place = placeForZip(homeZip); return Object.assign(d, { propertyId: 'new', property: '', city: place?.city ?? '', state: place?.state ?? '', zip: place?.zip ?? '', area: place?.area ?? 'outside', access: '', parking: '', notes: '', accessConfirmed: false, propertyAllowance: false }); }
   return Object.assign(d, { propertyId: p.id, property: p.address, city: p.city, state: p.state, zip: p.zip ?? '', area: p.area, access: p.access, parking: p.parking, notes: '', stories: p.stories, size: p.size, accessConfirmed: p.accessConfirmed, propertyAllowance: p.propertyAllowance });
 }
 try { const saved = JSON.parse(localStorage.getItem('business-hq-operations-v2') || '{}'); packed = saved.packed && typeof saved.packed === 'object' ? saved.packed : {}; blockedDates = Array.isArray(saved.blockedDates) ? saved.blockedDates.filter(d => DEMO_DATES.includes(d)) : []; } catch { /* The demo still works without saved operational state. */ }
@@ -96,7 +102,7 @@ const hq=createFieldDesk({esc,icon,bookings:()=>bookings,work:()=>wf.getWork(),d
 
 function announce(message) { document.querySelector('#announcement').textContent = message; }
 function persist() { wf.sync(); try { localStorage.setItem(STORE, JSON.stringify(bookings)); } catch { storageAvailable = false; } }
-function navigate(next,mode='day') { if(next==='owner'){calendarMode=mode;if(mode==='day'&&!DEMO_DATES.includes(ownerDate))ownerDate=DEMO_DATES.find(d=>d.slice(0,7)===ownerDate.slice(0,7))||DEMO_DATES.find(d=>d>=ownerDate)||DEMO_DATES.at(-1);}const url=new URL(location.href);if(url.searchParams.has('view')){url.searchParams.delete('view');history.replaceState(null,'',url);}try{sessionStorage.setItem('business-hq-view-mode',ownerViews.includes(next)?'owner':'customer');}catch{} view = next; error = ''; dialog = null; focusMain = true; render(); }
+function navigate(next,mode='day') { if(next==='owner'){calendarMode=mode;if(mode==='day'&&!DEMO_DATES.includes(ownerDate))ownerDate=DEMO_DATES.find(d=>d.slice(0,7)===ownerDate.slice(0,7))||DEMO_DATES.find(d=>d>=ownerDate)||last(DEMO_DATES);}const url=new URL(location.href);if(url.searchParams.has('view')){url.searchParams.delete('view');history.replaceState(null,'',url);}try{sessionStorage.setItem('business-hq-view-mode',ownerViews.includes(next)?'owner':'customer');}catch{} view = next; error = ''; dialog = null; focusMain = true; render(); }
 function startBooking(id = 'leaves', previous = null) {
   draft = previous ? { ...previous, catalogSnapshot:getRules(), promotionSnapshot:freshPromotion(), extraWork:[], approvedOffer:undefined, services: [...previous.services], date: DEMO_DATES[0], start: null } : useProperty({ ...defaultDraft(), services: [id] }, serviceProperties()[0]);
   withKnownContact(draft); draft.billing = undefined; draft.expectedId = undefined; draft.date = firstAvailableDate(); stage = 0; currentId = null; navigate('book');
@@ -104,15 +110,14 @@ function startBooking(id = 'leaves', previous = null) {
 function shell(content) {
   const active = ownerViews.includes(view) ? 'owner' : view === 'bookings' ? 'bookings' : 'home';
   const brand = `<span class="brand-mark">${icon('leaf')}</span><span><strong>Joe’s Landscaping</strong><small>A little care. A better outdoors.</small></span>`;
-  return `  <div class="shell ${active==='owner'?'owner-shell':'customer-shell'}"><aside class="sidebar"><a class="brand" href="#" data-action="${active==='owner'?'owner':'home'}">${brand}</a>
+  return `<div class="proto-bar"><span><b>Prototype</b><span class="proto-side"> · ${active==='owner'?'Joe’s side':'Customer side'}</span> · fictional data</span><button class="proto-tour" data-action="tour" aria-haspopup="dialog">${icon('grid')}<span>Prototype tour</span></button></div>
+  <div class="shell ${active==='owner'?'owner-shell':'customer-shell'}"><aside class="sidebar"><a class="brand" href="#" data-action="${active==='owner'?'owner':'home'}">${brand}</a>
   <div><div class="nav-caption">${active==='owner'?'YOUR BUSINESS':'YOUR NEIGHBORHOOD, CARED FOR'}</div><nav class="nav-group" aria-label="${active==='owner'?'Owner navigation':'Customer navigation'}">
   ${active==='owner'?hq.nav(view,calendarMode):`  <button class="nav-item ${active === 'home' ? 'active' : ''}" ${active === 'home' ? 'aria-current="page"' : ''} data-action="home">${icon('grid')}<span>Book a service</span></button>
   <button class="nav-item ${active === 'bookings' ? 'active' : ''}" ${active === 'bookings' ? 'aria-current="page"' : ''} data-action="bookings">${icon('calendar')}<span>My bookings</span>${bookings.filter(b => b.status !== 'cancelled').length ? `<span class="pill">${bookings.filter(b => b.status !== 'cancelled').length}</span>` : ''}</button>
-  <button class="nav-item ${active === 'owner' ? 'active' : ''}" ${active === 'owner' ? 'aria-current="page"' : ''} data-action="owner">${icon('bag')}<span>Joe’s workspace</span><span class="pill">DEMO</span></button>
 `}
-  </nav></div><div class="sidebar-note">${icon('leaf')}<strong>${active==='owner'?'Your business, one day at a time.':'Good work. Less back-and-forth.'}</strong>${active==='owner'?'Your next job. What to bring. What needs you. Everything else is in My business.':'Pick your services. Find a time. We’ll take care of the details.'}</div>
-  <div class="powered"><span class="bhq">B</span><span>A small business, powered by <b>Business HQ</b></span></div></aside>
-  <div class="workspace"><header class="topbar" data-action="hours"><div class="brand header-brand">${active==='owner'?`<a class="header-home" href="#" data-action="owner">${brand}</a>`:`<span class="header-home">${brand}</span>`}${hoursButton('booking-hours','header-hours',`<b>${active==='owner'?'Owner demo':'Customer demo'}</b>`)}</div><div class="top-actions"><button class="btn share-app" id="header-share-app" data-action="share-app" aria-label="${active==='owner'?'Share your booking page':'Share Joe’s booking page'}">${icon('share')}<span>Share</span></button>${active==='owner'?`<button class="icon-btn contact-action" aria-label="Field desk help" data-action="hq-help">${icon('help')}<span>Help</span></button>`:`<button class="icon-btn contact-action" aria-label="Joe’s contact details" data-action="contact">${icon('phone')}<span>Call</span></button>`}</div></header>
+  </nav></div><div class="powered"><span class="bhq">B</span><span>A small business, powered by <b>Business HQ</b></span></div></aside>
+  <div class="workspace"><header class="topbar" data-action="hours"><div class="brand header-brand">${active==='owner'?`<a class="header-home" href="#" data-action="owner">${brand}</a>`:`<span class="header-home">${brand}</span>`}${hoursButton('booking-hours','header-hours')}</div><div class="top-actions"><button class="btn share-app" id="header-share-app" data-action="share-app" aria-label="${active==='owner'?'Share your booking page':'Share Joe’s booking page'}">${icon('share')}<span>Share</span></button>${active==='owner'?`<button class="icon-btn contact-action" aria-label="Field desk help" data-action="hq-help">${icon('help')}<span>Help</span></button>`:`<button class="icon-btn contact-action" aria-label="Joe’s contact details" data-action="contact">${icon('phone')}<span>Call</span></button>`}</div></header>
   <main id="main" tabindex="-1">${content}<footer class="footer"><span>Joe’s Landscaping · East Providence, RI · Serving neighbors since 2015</span><span>Sample dates 2026–2027 · Saved on this device</span></footer></main></div></div>${dialog ? dialogContent() : ''}`;
 }
 function hoursButton(cls, id, extra = '') {
@@ -133,19 +138,33 @@ function recentOrders(property, previous, promoNow) {
   <div class="recent-list">${recent.map(({ id, date }) => `<label class="addon recent-row ${picked.includes(id) ? 'selected' : ''}" for="recent-${id}"><span class="service-icon ${SERVICES[id].icon}">${icon(SERVICES[id].icon)}</span><span><h3>${SERVICES[id].name}${promoBadge(id, promoNow)}</h3><p class="service-meta">${fromPrice(id, promoNow)}</p><small class="recent-date">Last ordered ${ordered(date)}</small></span><input type="checkbox" id="recent-${id}" data-recent="${id}"${checked(picked.includes(id))}></label>`).join('')}</div>
   <div class="recent-foot"><span class="hint">${picked.length ? `${picked.length} selected` : 'Select services to book again'}</span><button class="btn" data-action="rebook-selected"${picked.length ? '' : ' disabled'}>Book again ${icon('arrow')}</button></div></section>`;
 }
+function zipCheck() {
+  const place = placeForZip(homeZip);
+  if (place?.served) {
+    const miles = AREAS[place.area].miles, travel = quote({ ...defaultDraft(), area: place.area }).travel;
+    return `<section class="zip-check served" aria-live="polite">${icon('check')}<div><strong>Joe comes to ${esc(place.city)}, ${esc(place.zip)}</strong><p>${miles} miles away · ${money(travel)} travel, charged once per visit</p></div><button class="text-btn" data-action="zip-change">Change</button></section>`;
+  }
+  if (place) return `<section class="zip-check outside" aria-live="polite"><div><strong>Joe doesn’t serve ${esc(place.zip)} yet</strong><p>He works in East Providence and Riverside, RI. Leave your mobile number and he’ll text you if that changes.</p>
+  ${waitlistDone ? `<p class="zip-thanks">${icon('check')}Got it. Saved on this device. No text is sent in the demo.</p>` : `<div class="zip-row"><label class="sr-only" for="waitlist-phone">Mobile number</label><input id="waitlist-phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="401-555-0123" maxlength="20"><button class="btn secondary" data-action="waitlist">Text me</button></div>`}
+  ${zipError ? `<p class="field-error" role="alert">${esc(zipError)}</p>` : ''}<button class="text-btn" data-action="zip-change">Try another ZIP</button></div></section>`;
+  return `<section class="zip-check"><label for="zip-input"><strong>Does Joe come to you?</strong><span>Enter your ZIP code to see travel and open times.</span></label>
+  <div class="zip-row"><input id="zip-input" inputmode="numeric" maxlength="5" autocomplete="postal-code" placeholder="02914"${zipError ? ' aria-invalid="true" aria-describedby="zip-error"' : ''}><button class="btn" data-action="zip-check">Check</button></div>${zipError ? `<p class="field-error" id="zip-error" role="alert">${esc(zipError)}</p>` : ''}</section>`;
+}
 function home() {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }), promoNow = inFallPromo(today);
   const property = homeProperty() ?? PROPERTIES[0], previous = propertyHistory(property, bookings);
   const pending = bookings.filter(b => b.pendingChange?.status === 'awaiting_customer').length;
-  return `${promoNow ? `<section class="hero compact-promo" aria-label="Fall seasonal promotions"><div><div class="eyebrow">FALL SEASONAL PROMOTIONS<span class="promo-ends"> · Ends ${fallPromoEnds(today)}</span></div><h2>Fall care, handled.</h2><ul class="promo-list">${Object.entries(FALL_PROMO.rates).map(([id, rate]) => `<li><b>${Math.round(rate * 100)}% off</b> ${SERVICES[id].name.replace(/^Fall l/, 'L').toLowerCase()}</li>`).join('')}</ul><button class="btn" data-action="fall-bundle">Build my fall visit ${icon('arrow')}</button></div>${garden()}</section>` : ''}
-  <div class="intro-row"><div><h1 class="home-greeting">Hi${knownPerson() ? ` ${esc(firstName(knownPerson()))}` : ''}, how can we help today?</h1><p>Whatever your yard needs this season, we’re here to help. Pick a service and a time, and we’ll take care of the rest.</p><button class="text-btn identity-switch" data-action="${knownPerson() ? 'new-customer' : 'demo-returning'}">${knownPerson() ? `Not ${esc(firstName(knownPerson()))}? Start as a new customer` : 'Demo: continue as returning customer Mary'}</button></div>${hoursButton('tag hours-tag','home-hours',icon('clock'))}</div>
-  ${pending ? `<div class="notice warning">${icon('rain')}<span>${pending} demo weather update${pending === 1 ? '' : 's'} waiting for a customer answer.</span><button class="text-btn" data-action="bookings">Review changes ${icon('arrow')}</button></div>` : ''}
+  const promoList = Object.entries(FALL_PROMO.rates).map(([id, rate]) => `${Math.round(rate * 100)}% off ${SERVICES[id].name.replace(/^Fall l/, 'L').toLowerCase()}`).join(' · ');
+  return `<section class="storefront"><div class="owner-intro"><span class="owner-avatar" aria-hidden="true">J</span><span><strong>Joe</strong><small>Owner · serving East Providence and Riverside since 2015</small></span></div>
+  <h1 class="home-greeting">Hi${knownPerson() ? ` ${esc(firstName(knownPerson()))}` : ''}, how can we help today?</h1><p class="home-lede">See the full price before you book. One visit, one travel charge.</p></section>
+  ${homeProperty() ? '' : zipCheck()}
+  ${promoNow ? `<p class="promo-strip">${icon('leaf')}<span><b>Fall pricing until ${fallPromoEnds(today)}:</b> ${promoList}</span></p>` : ''}
+  ${pending ? `<div class="notice warning">${icon('rain')}<span>${pending} weather update${pending === 1 ? '' : 's'} waiting for your answer.</span><button class="text-btn" data-action="bookings">Review changes ${icon('arrow')}</button></div>` : ''}
   ${homeProperty() ? recentOrders(property, previous, promoNow) : ''}
-  <div class="section-heading"><div><h2>Services we offer</h2><p>Choose a service and see the full price before you book.</p></div><span>${Object.keys(SERVICES).length} services · One easy visit</span></div>
+  <div class="section-heading"><div><h2>Services</h2><p>Pick one or more for a single visit.</p></div></div>
   ${serviceFilters()}
   <section class="services" aria-label="Available services">${Object.entries(SERVICES).map(([id, service]) => `<label class="service-card${homePick.includes(id) ? ' picked' : ''}" data-id="${id}" data-category="${esc(service.category)}" data-search="${esc(`${service.name} ${service.category} ${service.description}`.toLowerCase())}"${serviceShown(id) ? '' : ' hidden'}><span class="service-icon ${service.icon}">${icon(service.icon)}</span><span><span class="category">${service.category}</span><h3>${service.name}${promoBadge(id, promoNow)}</h3><p>${service.description}</p><span class="service-meta">${fromPrice(id, promoNow)}<span>·</span>${duration(getRules()[id].minutes)}</span></span><input type="checkbox" class="service-pick" data-home-pick="${id}" aria-label="Select ${esc(service.name)}"${checked(homePick.includes(id))}></label>`).join('')}</section><p class="services-empty"${Object.keys(SERVICES).some(serviceShown) ? ' hidden' : ''}>No services match. <button class="text-btn" data-action="service-filter" data-id="all">Show all services</button></p>
-  <section class="try-owner"><div><strong>See the other side of a better day.</strong><p>Try two demo visits, a packing list, and a rain-delay decision.</p></div><button class="text-btn" data-action="load-working-day">Try Joe’s working day ${icon('arrow')}</button></section>
-  <section class="wf-tour"><div><span class="eyebrow">NEW · THE WHOLE SERVICE JOURNEY</span><h3>From a good question to the next visit.</h3><p>Configure a service, agree a quote, finish the work, and make returning easy.</p></div><button class="btn secondary small" data-action="wf-nav" data-id="manage">Explore My business ${icon("arrow")}</button></section><div class="trust-strip"><span>${icon('shield')}A clear total before you book</span><span>${icon('clock')}Appointments that fit the whole visit</span><span>${icon('pin')}East Providence & Riverside</span></div>${homeContinue()}`;
+  ${homeContinue()}`;
 }
 // Category chips over the service list; a search box joins them once the list is long enough to need one.
 const SEARCH_MIN = 7;
@@ -163,7 +182,7 @@ function serviceFilters() {
 // Bar anchored at the bottom of the home screen: book every ticked service in one visit.
 function homeContinue() {
   if (!homePick.length) return '';
-  return `<div class="home-continue" role="region" aria-label="Selected services"><span><strong>Choose your services</strong><small>Select one or more, then continue</small></span><button class="btn" data-action="home-continue">Continue ${icon('arrow')}</button></div>`;
+  return `<div class="home-continue" role="region" aria-label="Selected services"><span><strong>${homePick.length} service${homePick.length === 1 ? '' : 's'} selected</strong><small>${homePick.map(id => esc(SERVICES[id].name)).join(' + ')}</small></span><button class="btn" data-action="home-continue">Continue ${icon('arrow')}</button></div>`;
 }
 // Filter in place so the search box keeps focus while typing.
 function applyServiceFilter() {
@@ -174,6 +193,7 @@ function applyServiceFilter() {
 function stepper() { return `<div class="stepper" aria-label="Booking progress">${['Your visit', 'Find a time', 'Review & book'].map((name, i) => `${i ? '<span class="step-line"></span>' : ''}<div class="step ${i === stage ? 'active' : i < stage ? 'done' : ''}" ${i === stage ? 'aria-current="step"' : ''}><b>${i < stage ? '✓' : i + 1}</b>${name}</div>`).join('')}</div>`; }
 // Booking sections collapse once their required fields are complete, with a green check. Tap the header to reopen.
 // Prefilled choices are only suggestions: a section counts as complete after the customer taps to confirm it.
+let editingServices = false;
 let sectionOpen = {}, sectionDone = {}, sectionLocked = {}, sectionDraft = null, confirmed = {}, showMissing = {}, bookingWeek = null;
 function sectionState() { if (sectionDraft !== draft) { sectionDraft = draft; sectionOpen = {}; sectionDone = {}; sectionLocked = {}; confirmed = {}; showMissing = {}; bookingWeek = null; } }
 function confirmChoices(...ids) { sectionState(); ids.forEach(id => { confirmed[id] = true; }); }
@@ -191,7 +211,7 @@ const askQuestions = d => wf.questions(d, 'answer', (id, key) => !confirmed[`q:$
 function sectionComplete(id) {
   sectionState();
   if (id === 'place') return Boolean(confirmed.place && placeComplete());
-  if (id === 'services') return Boolean(confirmed.services && draft.services.length);
+  if (id === 'services') return draft.services.length > 0;
   if (id === 'details') return detailsAnswered() && Boolean(confirmed.details);
   if (id === 'time') return Boolean(confirmed.time) && draft.start !== null && slots(draft, bookings).includes(draft.start);
   if (id === 'billing') return Boolean(confirmed.billing && doneReady('billing'));
@@ -201,7 +221,7 @@ function sectionComplete(id) {
 }
 const preselected = '<span class="preselected-tag">Preselected · tap to confirm</span>';
 // Panels open in order: each stays locked until every panel above it in this step is complete.
-const SECTION_ORDER = [['place', 'services', 'details', 'quote'], ['time', 'billing', 'contact']];
+const SECTION_ORDER = [['place', 'details', 'quote'], ['time', 'billing', 'contact']];
 const missingText = ready => ready ? 'All answered. Tap Done to continue.' : 'Finish the highlighted items to continue.';
 const doneButton = id => { const ready = doneReady(id); return `${showMissing[id] ? `<p class="section-missing" role="status">${missingText(ready)}</p>` : ''}<button class="btn small section-done${ready ? '' : ' incomplete'}" data-action="section-done" data-id="${id}">Done ${icon('check')}</button>`; };
 // A panel's Done stays pressable: pressing it early highlights what is still needed instead of doing nothing.
@@ -251,7 +271,7 @@ const headerOffset = () => (document.querySelector('.topbar')?.getBoundingClient
 const dayChosen = () => Boolean(confirmed.date) || draft.start !== null;
 // One week at a time. Each working day shows its own hours; arrows skip weeks with no sample dates.
 function weekPicker() {
-  const shown = weekDates(bookingWeek ?? draft.date), earlier = DEMO_DATES.filter(d => d < shown[0]).at(-1), later = DEMO_DATES.find(d => d > shown[6]);
+  const shown = weekDates(bookingWeek ?? draft.date), earlier = last(DEMO_DATES.filter(d => d < shown[0])), later = DEMO_DATES.find(d => d > shown[6]);
   const short = d => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
   const day = d => {
     const when = new Date(`${d}T12:00:00Z`), hours = hoursFor(d), bookable = DEMO_DATES.includes(d), rain = blockedDates.includes(d);
@@ -338,23 +358,32 @@ function propertyEditor(p) {
   <div class="field wide"><label for="edit-access">Access instructions</label><textarea id="edit-access" data-edit-property="access" maxlength="300" placeholder="e.g. Use the right side gate to enter the back yard">${esc(e.access ?? '')}</textarea><span class="hint">Joe confirms changes before your visit.</span></div></div>
   <div class="btn-row"><button class="btn small" data-action="save-property"${propertyReady(e) ? '' : ' disabled'}>Save changes</button><button class="text-btn" data-action="cancel-property">Cancel</button></div></div>`;
 }
+function placeNote(q, area) {
+  if (q.serviceable) return `<div class="property-distance">${icon('car')}<span><strong>${area.miles} miles from Joe</strong><small>${esc([draft.city, draft.state, draft.zip].filter(Boolean).join(' '))} · ${money(q.travel)} round-trip travel, included in your total</small></span></div>`;
+  if (draft.propertyId === 'new' && !validZipCode(draft.zip)) return `<p class="hint place-hint">${icon('pin')}Joe works in East Providence and Riverside, RI. Your ZIP sets the travel charge.</p>`;
+  return `<div class="property-distance outside">${icon('car')}<span><strong>Joe doesn’t serve ${esc(draft.zip || draft.city || 'this address')} yet</strong><small>He works in East Providence (02914, 02916) and Riverside (02915), RI. Check the ZIP or choose another address.</small></span></div>`;
+}
+function visitServices() {
+  const list = Object.entries(SERVICES).map(([id, s]) => { const on = draft.services.includes(id); return `<label class="addon ${on ? 'selected' : ''}" for="add-${id}"><span class="service-icon ${s.icon}">${icon(s.icon)}</span><span><h3>${s.name}</h3><p>${FALL_PROMO.rates[id] ? `${Math.round(FALL_PROMO.rates[id] * 100)}% off fall visits` : `From ${money((draft.catalogSnapshot ?? getRules())[id].base)}`}</p></span><input type="checkbox" id="add-${id}" data-service="${id}"${checked(on)}${on && draft.services.length === 1 ? ' disabled aria-describedby="last-service"' : ''}></label>`; }).join('');
+  return `<section class="panel visit-services${editingServices ? ' editing' : ''}"><div class="visit-services-head">${icon('bag')}<span><small>Your visit</small><strong>${draft.services.map(id => esc(SERVICES[id].name)).join(' + ')}</strong></span><button class="text-btn" data-action="edit-services" aria-expanded="${editingServices}">${editingServices ? 'Done' : 'Change'}</button></div>${editingServices ? `<div class="visit-services-list" data-need="services">${list}</div>${draft.services.length === 1 ? '<p class="hint" id="last-service">A visit needs at least one service.</p>' : ''}` : ''}</section>`;
+}
 function scope() {
   if(draft.approvedOffer)return `<section class="panel"><div class="eyebrow">OWNER-APPROVED SCOPE</div><h2>${draft.services.map(id=>esc(SERVICES[id].name)).join(' + ')}</h2><p>${esc(draft.property)}</p><div class="notice">${esc(draft.approvedOffer.note)}</div><p>Your accepted quote fixes this scope and includes travel. Choose a date and time next.</p></section>`;
   const hasYard = draft.services.some(id => id === 'leaves' || id === 'mowing');
   const props = serviceProperties(), q = quote(draft), area = AREAS[draft.area] ?? AREAS.outside;
   sectionState();
+  if (!props.length && draft.propertyId === 'new') confirmed.picked = true; // nothing to choose between, so no tap-to-confirm
   const option = (id, title, detail, iconName, note = '') => { const on = draft.propertyId === id, pre = on && !confirmed.picked; return `<label class="addon property-option ${on ? pre ? 'preselected' : 'selected' : ''}" for="property-${id}"><span class="service-icon">${icon(iconName)}</span><span><h3>${title}</h3><p>${detail}</p>${note ? `<small class="property-access-note"><b>Access:</b> ${note}</small>` : ''}${pre ? preselected : ''}${id !== 'new' ? cardActions('property', id, title, 'edit-property') : ''}</span><input type="radio" name="property-pick" id="property-${id}" data-action="pick-property" data-id="${id}"${checked(on && !pre)}></label>`; };
   const picked = props.find(p => p.id === draft.propertyId);
   const placeSummary = esc([picked?.label ?? draft.property, draft.city, q.serviceable ? `${area.miles} miles from Joe` : ''].filter(Boolean).join(' · '));
   const servicesSummary = draft.services.map(id => esc(SERVICES[id].name)).join(' + ');
   const detailsSummary = [hasYard ? `${draft.size[0].toUpperCase()}${draft.size.slice(1)} yard` : '', draft.services.includes('leaves') && confirmed.haul ? draft.haul ? 'haul-away' : 'bagged at the curb' : '', draft.services.includes('gutters') ? `${draft.stories} ${Number(draft.stories) === 1 ? 'story' : 'stories'}` : ''].filter(Boolean).join(' · ') || 'Nothing else needed';
-  return `${section('place', 'pin', 'First, where are we headed?', placeSummary, `<p>Choose one of your saved properties, or add a new one. All details here are fictional.</p>
-  <div class="property-picker" data-need="place" role="radiogroup" aria-label="Your properties">${props.map(p => option(p.id, esc(p.label), esc([p.address, p.city, p.state].filter(Boolean).join(', ')), 'house', esc(p.access ?? '')) + (editingProperty?.id === p.id ? propertyEditor(p) : '')).join('')}${option('new', 'Add a new property', 'We’ll save it to your account for next time', 'plus')}</div>
-  <div class="fields">${draft.propertyId === 'new' ? `<div data-need="property" class="field wide"><label for="property">Street address${req}</label><input id="property" required data-field="property" value="${esc(draft.property)}" maxlength="80" autocomplete="address-line1"></div><div data-need="city" class="field"><label for="city">City${req}</label><input id="city" required data-field="city" value="${esc(draft.city ?? '')}" maxlength="40" list="served-cities" autocomplete="address-level2"><datalist id="served-cities">${Object.values(AREAS).filter(a => a.miles !== null).map(a => `<option value="${a.name}">`).join('')}</datalist></div><div data-need="state" class="field"><label for="state">State${req}</label><input id="state" required data-field="state" value="${esc(draft.state ?? '')}" maxlength="2" autocomplete="address-level1" style="text-transform:uppercase"></div>` : ''}
-  <div class="field wide"><div class="property-distance ${q.serviceable ? '' : 'outside'}">${icon('car')}<span>${q.serviceable ? `<strong>${area.miles} miles from Joe</strong><small>${area.name} · ${money(q.travel)} round-trip travel, included in your total</small>` : `<strong>${draft.city?.trim() ? 'Outside Joe’s service area' : 'Enter a city to see the distance'}</strong><small>Joe serves ${Object.values(AREAS).filter(a => a.miles !== null).map(a => a.name).join(' and ')}, RI.</small>`}</span></div></div>
+  return `${visitServices()}${section('place', 'pin', 'First, where are we headed?', placeSummary, `${props.length ? '<p>Pick a saved address or add a new one.</p>' : ''}
+  <div class="property-picker" data-need="place" role="radiogroup" aria-label="Your properties">${props.map(p => option(p.id, esc(p.label), esc([p.address, p.city, p.state].filter(Boolean).join(', ')), 'house', esc(p.access ?? '')) + (editingProperty?.id === p.id ? propertyEditor(p) : '')).join('')}${option('new', props.length ? 'Add a new address' : 'Your address', props.length ? 'Saved for next time' : 'We’ll save it for next time', 'plus')}</div>
+  <div class="fields">${draft.propertyId === 'new' ? `<div data-need="zip" class="field zip-field"><label for="zip">ZIP code${req}</label><input id="zip" required data-field="zip" value="${esc(draft.zip ?? '')}" inputmode="numeric" maxlength="5" autocomplete="postal-code" placeholder="02914"></div><div data-need="property" class="field street-field"><label for="property">Street address${req}</label><input id="property" required data-field="property" value="${esc(draft.property)}" maxlength="80" autocomplete="address-line1" placeholder="12 Maple Lane"></div>` : ''}
+  <div class="field wide">${placeNote(q, area)}</div>
   ${draft.propertyId === 'new' ? `<div class="field wide"><label for="property-access">Access instructions</label><textarea id="property-access" data-field="access" maxlength="300" placeholder="e.g. Use the right side gate to enter the back yard">${esc(draft.access || draft.notes || '')}</textarea><span class="hint">Joe confirms these when he accepts the job.</span></div>` : ''}</div>${draft.propertyId === 'new' ? doneButton('place') : ''}`)}
-  ${section('services', 'bag', 'Choose your services', servicesSummary, `<p>Select everything you need. The questions for your visit appear below.</p><div data-need="services">${Object.entries(SERVICES).map(([id,s]) => { const on = draft.services.includes(id), pre = on && !confirmed.picked_services; return `<label class="addon ${on ? pre ? 'preselected' : 'selected' : ''}" for="add-${id}"><span class="service-icon ${s.icon}">${icon(s.icon)}</span><span><h3>${s.name}</h3><p>${FALL_PROMO.rates[id] ? `${Math.round(FALL_PROMO.rates[id] * 100)}% off fall visits (Sep–Nov)` : `${money((draft.catalogSnapshot??getRules())[id].base)} starting price · scope adjusts total`}</p>${pre ? preselected : ''}</span><input type="checkbox" id="add-${id}" data-service="${id}"${checked(on && !pre)}></label>`; }).join('')}</div>${doneButton('services')}`)}
-  ${section('details', 'leaf', 'A few details. A clear price.', detailsSummary, `<p>Tell Joe what to expect, and your price total updates as you go.</p>
+  ${section('details', 'leaf', 'A few details. A clear price.', detailsSummary, `<p>Your total updates as you answer.</p>
   ${hasYard ? `<div data-need="size" style="margin-top:20px"><span class="label" id="yard-label">How big is your yard?${req}</span><div class="choice-row" role="group" aria-labelledby="yard-label">${[['small','Small','Under ¼ acre'],['medium','Medium','¼–½ acre'],['large','Large','½–1 acre']].map(([id,n,desc]) => { const on = draft.size === id, pre = on && !confirmed.size; return `<button class="choice ${on ? pre ? 'preselected' : 'selected' : ''}" aria-pressed="${on && !pre}" data-action="size" data-id="${id}"><strong>${n}</strong><small>${desc}</small>${pre ? '<span class="preselected-tag">Preselected</span>' : ''}</button>`; }).join('')}</div><p class="hint" style="margin-top:10px">Over 1 acre or unusually heavy debris? Ask Joe for an assessment before booking.</p></div>` : ''}
   ${draft.services.includes('leaves') ? `<div data-need="haul" style="margin-top:20px"><span class="label" id="haul-label">What should Joe do with the leaves?${req}</span><div class="choice-row two" role="group" aria-labelledby="haul-label">${[['no','Bag them at the curb','Included'],['yes','Take them away','+$35 · adds 15 min']].map(([id,n,desc]) => { const on = confirmed.haul && String(draft.haul) === String(id === 'yes'); return `<button class="choice ${on ? 'selected' : ''}" aria-pressed="${on}" data-action="haul" data-id="${id}"><strong>${n}</strong><small>${desc}</small></button>`; }).join('')}</div></div>` : ''}
   ${draft.services.includes('gutters') ? `<div data-need="stories" style="margin-top:20px"><span class="label" id="stories-label">How many stories is your home?${req}</span><div class="choice-row" role="group" aria-labelledby="stories-label">${[[1,'1 story','Base price'],[2,'2 stories','+$40 before discount · adds 30 min'],[3,'3 or more','Assessment needed']].map(([n,name,desc]) => { const on = confirmed.stories && Number(draft.stories) === n; return `<button class="choice ${on ? 'selected' : ''}" aria-pressed="${Boolean(on)}" data-action="stories" data-id="${n}"><strong>${name}</strong><small>${desc}</small></button>`; }).join('')}</div></div>` : ''}
@@ -440,14 +469,14 @@ function bill(q, withAction = false) {
   return `<aside class="summary"><section class="panel"><div class="summary-heading"><h3>Your visit, at a glance</h3>${icon('receipt')}</div>
   ${q.lines.map(l => `<div class="bill-line"><span>${l.name}<small>${esc(l.details)}</small></span><strong>${money(l.amount)}</strong></div>`).join('')}
   ${(q.discounts ?? []).map(d => `<div class="bill-line discount"><span>${esc(d.label??'Fall promotion')}<small>${Math.round(d.rate * 100)}% off ${esc(d.name.toLowerCase())}</small></span><strong>−${money(d.amount)}</strong></div>`).join('')}
-  <div class="bill-line"><span>Travel · once per visit<small>${draft.approvedOffer?'Included in agreed quote':q.miles === null ? 'Outside service area' : `${q.miles} mi × 2 (round trip) × $4`}</small></span><strong>${q.miles === null ? '—' : money(q.travel)}</strong></div>
-  <div class="bill-line"><span>Illustrative tax</span><strong>$0</strong></div><div class="bill-total"><span>${needsQuote ? 'Scope estimate' : 'Your total'}</span><strong aria-live="polite">${unavailable ? '—' : money(q.total)}</strong></div>
+  <div class="bill-line"><span>Travel · once per visit<small>${draft.approvedOffer?'Included in agreed quote':q.miles === null ? (draft.propertyId === 'new' && !validZipCode(draft.zip) ? 'Added once you enter a ZIP' : 'Not in Joe’s area yet') : `${q.miles} mi × 2 (round trip) × $4`}</small></span><strong>${q.miles === null ? 'Pending' : money(q.travel)}</strong></div>
+  <div class="bill-line"><span>Illustrative tax</span><strong>$0</strong></div><div class="bill-total"><span>${needsQuote ? 'Scope estimate' : q.serviceable ? 'Your total' : 'Before travel'}</span><strong aria-live="polite">${!q.lines.length ? '—' : money(q.total)}</strong></div>
   <div class="summary-detail">${icon('clock')}<span>${duration(q.minutes)} of service<br>+ ${BUFFER} min travel & setup<br>${draft.start !== null ? `${dateLabel(draft.date)} · ${time(draft.start)}` : 'One visit. One travel charge.'}</span></div>
-  ${!q.serviceable ? '<div class="error">This property is outside Joe’s service area. Choose a supported demo zone.</div>' : ''}${needsQuote?'<div class="notice warning">Joe needs to review the scope before you can reserve a visit. Request an exact quote below.</div>':''}<div class="wf-prep"><strong>Preparation for this visit</strong><p>${q.tools.map(esc).join(' · ')}</p></div>
+  ${needsQuote?'<div class="notice warning">Joe needs to review the scope before you can reserve a visit. Request an exact quote below.</div>':''}<div class="wf-prep"><strong>Preparation for this visit</strong><p>${q.tools.map(esc).join(' · ')}</p></div>
   ${error ? `<div class="error" role="alert">${esc(error)}</div>` : ''}
-  ${withAction ? `<button class="btn full" data-action="${needsQuote?'wf-request-quote':'next'}"${continueBlocked(q) ? ' disabled' : ''}>${needsQuote?'Request an owner quote':stage === 0 ? 'Find a time' : stage === 1 ? 'Review my visit' : 'Confirm demo booking'} ${icon(stage === 2 ? 'check' : 'arrow')}</button>${stage > 0 ? '<button class="text-btn" style="margin-top:9px" data-action="previous">← Back a step</button>' : ''}<div class="summary-foot">${stage === 2 ? 'Creates a demo booking in this browser.<br>No card needed. No message is sent.' : 'A clear price, before you commit.<br>Sample dates and fictional properties.'}</div>` : ''}</section></aside>`;
+  ${withAction ? `<button class="btn full" data-action="${needsQuote?'wf-request-quote':'next'}"${continueBlocked(q) ? ' disabled' : ''}>${needsQuote?'Request an owner quote':stage === 0 ? 'Find a time' : stage === 1 ? 'Review my visit' : 'Confirm demo booking'} ${icon(stage === 2 ? 'check' : 'arrow')}</button>${stage > 0 ? '<button class="text-btn" style="margin-top:9px" data-action="previous">← Back a step</button>' : ''}<div class="summary-foot">${stage === 2 ? 'Creates a demo booking in this browser.<br>No card needed. No message is sent.' : 'A clear price, before you commit.'}</div>` : ''}</section></aside>`;
 }
-function booking() { const q=quote(draft),needsQuote=q.assessment||q.minutes+30>240;return `<button class="text-btn back-btn" data-action="${stage?'previous':'home'}">${icon('back')}${stage?'Back a step':'Back to services'}</button><div class="eyebrow">ONE VISIT · ${draft.services.length} SERVICE${draft.services.length===1?'':'S'} · ONE TRAVEL CHARGE</div><h1>${['Let’s plan your visit.','Find your time.','Good to go?'][stage]}</h1>${stepper()}<div class="booking-layout"><div>${stage===0?scope():stage===1?scheduling():review()}</div>${bill(q,true)}</div><div class="mobile-book-strip"><button class="price-trigger" id="mobile-price-trigger" data-action="price-breakdown" aria-haspopup="dialog" aria-label="View price breakdown, total ${money(q.total)}"><small>${needsQuote?'Scope estimate':'Your visit total'}</small><strong>${money(q.total)}</strong><span>View breakdown ${icon('plus')}</span></button><button class="btn" data-action="${needsQuote?'wf-request-quote':'next'}"${continueBlocked(q)?' disabled':''}>${needsQuote?'Request quote':stage===2?'Confirm demo booking':'Continue'} ${icon('arrow')}</button></div>`; }
+function booking() { const q=quote(draft),needsQuote=q.assessment||q.minutes+30>240;return `<button class="text-btn back-btn" data-action="${stage?'previous':'home'}">${icon('back')}${stage?'Back a step':'Back to services'}</button><h1>${['Let’s plan your visit.','Find your time.','Good to go?'][stage]}</h1>${stepper()}<div class="booking-layout"><div>${stage===0?scope():stage===1?scheduling():review()}</div>${bill(q,true)}</div><div class="mobile-book-strip"><button class="price-trigger" id="mobile-price-trigger" data-action="price-breakdown" aria-haspopup="dialog" aria-label="View price breakdown, total ${money(q.total)}"><small>${needsQuote?'Scope estimate':q.serviceable?'Your visit total':'Before travel'}</small><strong>${money(q.total)}</strong><span>View breakdown ${icon('plus')}</span></button><button class="btn" data-action="${needsQuote?'wf-request-quote':'next'}"${continueBlocked(q)?' disabled':''}>${needsQuote?'Request quote':stage===2?'Confirm demo booking':'Continue'} ${icon('arrow')}</button></div>`; }
 
 function bookingDetails(b) { return `<div class="review-row">${icon('calendar')}<span><strong>${dateLabel(b.draft.date)} · ${time(b.draft.start)}–${time(b.draft.start + b.minutes)}</strong><small>Eastern Time · ${duration(b.minutes)} of service</small></span></div><div class="review-row">${icon('pin')}<span>${esc(b.draft.property)}<small>${AREAS[b.draft.area]?.name || 'Demo area'}</small></span></div><div class="review-row">${icon('bag')}<span>${b.lines.map(l => `<span style="display:block">${esc(l.name)} <small>${esc(l.details)}</small></span>`).join('')}</span></div><div class="bill-total"><span>Confirmed demo price</span><strong>${money(b.total)}</strong></div>`; }
 function confirmation() {
@@ -466,7 +495,8 @@ function owner() {return `${error?`<div class="error" role="alert">${esc(error)}
 function dialogContent() {
   let content = '';
   const b = bookings.find(b => b.id === dialog.id);
-  if(dialog.type==='price-breakdown'){content=`<h2 id="dialog-title">Your visit price</h2><p>A clear breakdown of your current choices.</p>${bill(quote(draft),false)}`;
+  if(dialog.type==='tour'){const item=(action,iconName,title,detail,id='')=>`<button class="tour-item" data-action="${action}"${id?` data-id="${id}"`:''}><span class="service-icon">${icon(iconName)}</span><span><strong>${title}</strong><small>${detail}</small></span>${icon('arrow')}</button>`;content=`<h2 id="dialog-title">Prototype tour</h2><p>Joe’s Landscaping is a fictional business. Try the app from either side. Everything stays in this browser.</p><div class="tour-list">${item('new-customer','user','Book as a new customer','Check a ZIP, pick services, and book a visit.')}${item('demo-returning','repeat','Book again as Mary','A returning customer with saved homes and history.')}${item('load-working-day','sun','Run Joe’s working day','Two sample jobs, a load-up list, and a rain delay.')}${item('wf-nav','bag','Set up Joe’s business','Services, prices, quotes, and repeat visits.','manage')}</div>`;
+  }else if(dialog.type==='price-breakdown'){content=`<h2 id="dialog-title">Your visit price</h2><p>A clear breakdown of your current choices.</p>${bill(quote(draft),false)}`;
   }else if(dialog.type==='share-app'){const link=publicBookingLink(),owner=ownerViews.includes(view);content=`<h2 id="dialog-title">${owner?'Bring your customers with you.':'Share Joe’s Landscaping.'}</h2><p>${owner?'Share your booking page with a new customer or after a job. They can choose services and book without a phone call.':'Know a neighbor who needs yard care? Send them Joe’s booking page. They can see prices and book without a phone call.'}</p><div class="field"><label for="business-share-link">Customer booking link</label><input id="business-share-link" value="${esc(link)}" readonly></div><div class="btn-row"><button class="btn" data-action="copy-business-link">${icon('link')}Copy booking link</button>${typeof navigator.share==='function'?`<button class="btn secondary" data-action="native-business-share">${icon('share')}More sharing options</button>`:''}</div><p id="business-share-status" role="status" class="share-status"></p><p class="share-note">${owner?'This opens your public customer page.':'This opens Joe’s booking page.'} No booking details are included.</p>`;
   }else if(dialog.type.startsWith('hq-')){content=hq.dialog(dialog);
   }else if(dialog.type.startsWith('wf-')) { content=wf.dialog(dialog);
@@ -535,14 +565,19 @@ document.addEventListener('click', async event => {
   if (!button) return;
   event.preventDefault();
   const action = button.dataset.action, id = button.dataset.id;
+  if (dialog?.type === 'tour' && action !== 'tour' && action !== 'close-dialog') dialog = null; // a tour choice closes the tour
+  if (action === 'tour') { openDialog({ type: 'tour' }); return; }
+  if (action === 'zip-check') { const input = document.querySelector('#zip-input'), place = placeForZip(input?.value ?? ''); if (!place) { zipError = 'Enter a 5-digit ZIP code.'; render(); document.querySelector('#zip-input')?.focus(); return; } zipError = ''; waitlistDone = false; setHomeZip(place.zip); render(); announce(place.served ? `Joe comes to ${place.city}.` : `Joe doesn’t serve ${place.zip} yet.`); return; }
+  if (action === 'zip-change') { setHomeZip(''); zipError = ''; waitlistDone = false; render(); document.querySelector('#zip-input')?.focus(); return; }
+  if (action === 'waitlist') { const phone = document.querySelector('#waitlist-phone')?.value.trim() ?? ''; if (phone.replace(/\D/g, '').length < 10) { zipError = 'Enter a 10-digit mobile number.'; render(); document.querySelector('#waitlist-phone')?.focus(); return; } try { const list = JSON.parse(localStorage.getItem(WAITLIST_STORE) || '[]'); list.push({ zip: homeZip, phone, at: new Date().toISOString() }); localStorage.setItem(WAITLIST_STORE, JSON.stringify(list)); } catch { storageAvailable = false; } zipError = ''; waitlistDone = true; render(); announce('Saved. Joe will text you if he starts serving your area.'); return; }
   if(await hq.handle(action,id))return;
   if (action === 'wf-request-quote' && view === 'book' && stage === 0) { const open = ['place', 'services', 'details', 'quote'].find(id => !sectionComplete(id)); if (open) { error = open === 'quote' ? 'Confirm where Joe should send the quote, then tap Done.' : 'Finish the sections above first.'; showWhatsMissing(open); return; } }
   if(wf.handle(action,id))return;
   if(action==='share-app'){openDialog({type:'share-app'});return;}
   if(action==='price-breakdown'){openDialog({type:'price-breakdown'});return;}
-  if(action==='copy-business-link'){const status=document.querySelector('#business-share-status');try{await navigator.clipboard.writeText(publicBookingLink());status.textContent=ownerViews.includes(view)?'Copied. Share this link with your next customer.':'Copied. Share Joe’s booking page with a neighbor.';}catch{document.querySelector('#business-share-link').select();status.textContent='Select and copy the booking link above.';}return;}
+  if(action==='copy-business-link'){const status=document.querySelector('#business-share-status');try{if(!await copyText(publicBookingLink()))throw new Error('copy');status.textContent=ownerViews.includes(view)?'Copied. Share this link with your next customer.':'Copied. Share Joe’s booking page with a neighbor.';}catch{document.querySelector('#business-share-link').select();status.textContent='Select and copy the booking link above.';}return;}
   if(action==='native-business-share'){try{await navigator.share({title:'Book Joe’s Landscaping',text:'Choose your services and book a visit with Joe.',url:publicBookingLink()});}catch(err){if(err.name!=='AbortError')document.querySelector('#business-share-status').textContent='Use Copy booking link to share this page.';}return;}
-  if(action==='calendar-mode'&&['day','week','month'].includes(id)){if(id==='day'&&!DEMO_DATES.includes(ownerDate)){ownerDate=(calendarMode==='week'?DEMO_DATES.find(d=>weekDates(ownerDate).includes(d)):DEMO_DATES.find(d=>d.slice(0,7)===ownerDate.slice(0,7)))||DEMO_DATES.find(d=>d>=ownerDate)||DEMO_DATES.at(-1);}calendarMode=id;render();return;}
+  if(action==='calendar-mode'&&['day','week','month'].includes(id)){if(id==='day'&&!DEMO_DATES.includes(ownerDate)){ownerDate=(calendarMode==='week'?DEMO_DATES.find(d=>weekDates(ownerDate).includes(d)):DEMO_DATES.find(d=>d.slice(0,7)===ownerDate.slice(0,7)))||DEMO_DATES.find(d=>d>=ownerDate)||last(DEMO_DATES);}calendarMode=id;render();return;}
   if(action==='calendar-period'&&calendarMode!=='day'){ownerDate=shiftPeriod(ownerDate,calendarMode,Number(id));render();return;}
   if(action==='calendar-day'&&(DEMO_DATES.includes(id)||bookings.some(b=>b.draft.date===id))){ownerDate=id;calendarMode='day';focusMain=true;render();return;}
 
@@ -570,8 +605,8 @@ document.addEventListener('click', async event => {
     propertyEdits[e.id] = { ...propertyEdits[e.id], ...changes }; persistProperties(); editingProperty = null;
     useProperty(draft, myProperties().find(p => p.id === e.id)); sectionState(); confirmed.picked = true; draft.start = null; error = ''; render(); announce('Property updated. Joe will confirm any access changes.'); return;
   }
-  if (action === 'demo-returning') { people = [MARY, ...people.filter(p => p.id !== MARY.id)]; persistPeople(); recentPick = null; render(); announce('Continuing as Mary.'); return; }
-  if (action === 'new-customer') { people = []; addedProperties = []; propertyEdits = {}; persistPeople(); persistProperties(); recentPick = null; homePick = []; render(); announce('Starting as a new customer.'); return; }
+  if (action === 'demo-returning') { people = [MARY, ...people.filter(p => p.id !== MARY.id)]; persistPeople(); recentPick = null; view = 'home'; render(); announce('Continuing as Mary.'); return; }
+  if (action === 'new-customer') { people = []; addedProperties = []; propertyEdits = {}; persistPeople(); persistProperties(); setHomeZip(''); zipError = ''; waitlistDone = false; recentPick = null; homePick = []; view = 'home'; render(); announce('Starting as a new customer.'); return; }
   if (action === 'bill-person') { sectionState(); if (id === 'new') { personForm = newPerson('bill'); draft.billing = { ...draft.billing, person: undefined }; render(); document.querySelector('#person-name')?.focus(); return; } const p = people.find(x => x.id === id); if (p && !billable(p)) { personForm = { ...editPersonForm(p, 'bill'), select: true }; draft.billing = { ...draft.billing, person: undefined }; render(); document.querySelector('#person-name')?.focus(); announce(`Add the missing billing details for ${p.name}.`); return; } if (p) { personForm = personForm?.target === 'bill' ? null : personForm; setBilled(p); render(); snapNext('billing'); } return; }
   if (action === 'bill-address') { sectionState(); if (id === 'new') { addressForm = { address: '', city: '', state: 'RI', zip: '' }; draft.billing = { ...draft.billing, addressId: undefined, address: undefined }; render(); document.querySelector('#address-address')?.focus(); return; } addressForm = null; const saved = myProperties().find(p => p.id === id); if ((id === 'service' && !validZip(draft.zip)) || (saved && !validZip(saved.zip))) { addressForm = id === 'service' ? { address: draft.property, city: draft.city, state: draft.state, zip: '' } : { editId: saved.id, select: true, address: saved.address ?? '', city: saved.city ?? '', state: saved.state ?? '', zip: '' }; render(); document.querySelector('#address-zip')?.focus(); announce('Add the ZIP code for this address.'); return; } const address = id === 'service' ? serviceAddress() : id === 'person' ? draft.billing?.personBillingAddress : saved && addressText(saved); if (address) { draft.billing = { ...draft.billing, addressId: id, address }; render(); snapNext('billing'); } return; }
   if (action === 'expect-person') { sectionState(); if (id === 'new') { personForm = newPerson('expect'); draft.expectedId = 'new'; render(); document.querySelector('#person-name')?.focus(); return; } personForm = personForm?.target === 'expect' ? null : personForm; draft.expectedId = id; syncExpected(); render(); return; }
@@ -632,15 +667,16 @@ document.addEventListener('click', async event => {
   if (action === 'section-done') { if (!doneReady(id)) { showWhatsMissing(id); announce('Please finish the highlighted items.'); return; } if (id === 'quote' && !people.some(p => p.name === draft.name.trim() && p.phone === draft.phone.trim())) { people.push({ id: `person-${Date.now().toString(36)}-${people.length}`, name: draft.name.trim(), phone: draft.phone.trim(), email: draft.email.trim(), type: 'person', company: '', billingAddress: '' }); persistPeople(); } confirmChoices(id); advance(id); error = ''; render(); advanceFrom = null; return; }
   if (action === 'home-continue') { if (!homePick.length) return; const picked = [...homePick]; homePick = []; startBooking(picked[0]); draft.services = picked; confirmChoices('picked_services', 'services'); render(); snapNext(); return; }
   if (action === 'service-filter') { serviceCategory = id; if (id === 'all') serviceQuery = ''; render(); document.querySelector('.filter-chip.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); return; }
+  if (action === 'edit-services') { editingServices = !editingServices; render(); if (!editingServices) snapNext(); return; }
   if (action === 'toggle-section') { sectionOpen[id] = !(sectionOpen[id] ?? false); render(); return; }
   if (action === 'slot') { confirmChoices('date'); draft.start=Number(id); error=''; render(); }
   if (action === 'edit') { stage=Number(id); error=''; focusMain=true; render(); }
   if (action === 'previous') { stage=Math.max(0,stage-1);error='';focusMain=true;render(); }
   if (action === 'next') {
     error='';
-    if (stage === 0 && !draft.approvedOffer) { const open=['place','services','details'].find(id=>!sectionComplete(id)); if(open){error=open==='place'?'Choose a property, then tap Done.':open==='services'?'Choose at least one service, then tap Done.':'Confirm your yard size and home details.';showWhatsMissing(open);return;} }
+    if (stage === 0 && !draft.approvedOffer) { const open=['place','services','details'].find(id=>!sectionComplete(id)); if(open){error=open==='place'?'Add your address, then tap Done.':open==='services'?'Choose at least one service.':'Answer the questions about your visit.';showWhatsMissing(open);return;} }
     if (stage === 1) { const open=['time','billing','contact'].find(id=>!sectionComplete(id)); if(open){error=open==='time'?'Choose a start time, then tap Done.':open==='billing'?'Add the invoice details, then tap Done.':'Confirm who Joe should expect, then tap Done.';showWhatsMissing(open);return;} }
-    if (stage === 0) { if(quote(draft).missing.length){error='Please answer: '+quote(draft).missing.join(', ');render();return;} if(quote(draft).assessment||quote(draft).minutes+30>240)return; if(!draft.property.trim()){error='Add the street address to continue.';render();return;} if(!quote(draft).serviceable){error='This property is outside Joe’s demo service area.';render();return;} stage=1; focusMain=true; render(); return; }
+    if (stage === 0) { if(quote(draft).missing.length){error='Please answer: '+quote(draft).missing.join(', ');render();return;} if(quote(draft).assessment||quote(draft).minutes+30>240)return; if(!draft.property.trim()){error='Add the street address to continue.';render();return;} if(!quote(draft).serviceable){error='Joe doesn’t serve this address yet. Check the ZIP code.';render();return;} stage=1; focusMain=true; render(); return; }
     const validation=validBooking(draft,bookings);
     if (validation) { error=validation; render(); return; }
     if (stage===1) { stage=2;focusMain=true;render();return; }
@@ -648,7 +684,7 @@ document.addEventListener('click', async event => {
     const bytes=crypto.getRandomValues(new Uint8Array(4));
     if (draft.propertyId === 'new') { const p = { id: `prop-${Array.from(bytes,n=>n.toString(16).padStart(2,'0')).join('')}`, customerId: CUSTOMER_ID, label: draft.property, address: draft.property, city: draft.city.trim(), state: draft.state.trim().toUpperCase(), area: draft.area, size: draft.size, stories: draft.stories, access: draft.access ?? '', parking: '', accessConfirmed: false, propertyAllowance: false }; addedProperties.push(p); persistProperties(); draft.propertyId = p.id; }
     draft.accessAnswered=Boolean(draft.access?.trim());
-    const b={id:`JHQ-${Array.from(bytes,n=>n.toString(16).padStart(2,'0')).join('').toUpperCase()}`,draft:structuredClone(draft),...quote(draft),status:'confirmed'};
+    const b={id:`JHQ-${Array.from(bytes,n=>n.toString(16).padStart(2,'0')).join('').toUpperCase()}`,draft:clone(draft),...quote(draft),status:'confirmed'};
     wf.booked(draft,b.id);bookings.push(b); persist(); currentId=b.id;ownerDate=b.draft.date;navigate('confirmation');announce('Your demo booking is confirmed.');
   }
   if (action === 'load-working-day') {
@@ -692,7 +728,7 @@ document.addEventListener('click', async event => {
   if (action==='share-booking') openDialog({type:'share',id});
   if (action==='copy-link') {
     const input=document.querySelector('#share-link');
-    try { await navigator.clipboard.writeText(input.value); document.querySelector('#copy-status').textContent='Copied. Open it in another browser to try demo recovery.'; }
+    try { if (!await copyText(input.value)) throw new Error('copy'); document.querySelector('#copy-status').textContent='Copied. Open it in another browser to try demo recovery.'; }
     catch { input.select(); document.querySelector('#copy-status').textContent='Select and copy the link above.'; }
   }
   if (action==='recover') recoverLink(document.querySelector('#recover-link').value);
@@ -714,6 +750,7 @@ document.addEventListener('input',event=>{if(hq.input(event.target))return;if(['
 document.addEventListener('input',event=>{const key=event.target.dataset.editProperty;if(key&&editingProperty){editingProperty[key]=event.target.value;const save=document.querySelector('[data-action="save-property"]');if(save)save.disabled=!propertyReady(editingProperty);}});
 document.addEventListener('input',event=>{if(event.target.matches('[data-service-search]')){serviceQuery=event.target.value;applyServiceFilter();}});
 // Keep a panel's Done button in step with typing; the full re-render waits for the change event.
+document.addEventListener('input',event=>{const el=event.target;if(el.dataset.field!=='zip')return;const zip=el.value.replace(/\D/g,'').slice(0,5);if(zip!==el.value)el.value=zip;const place=placeForZip(zip);Object.assign(draft,{zip,city:place?.city??'',state:place?.state??'',area:place?.area??'outside',start:null});if(zip.length===5||(draft.zip?.length??0)===5){render();const box=document.querySelector('#zip');if(box){box.focus({preventScroll:true});box.setSelectionRange(zip.length,zip.length);}}else applyNeeds();});
 document.addEventListener('input',event=>{const el=event.target,field=el.dataset.field;if(!['property','city','state','name','email','phone'].includes(field))return;draft[field]=field==='state'?el.value.trim().toUpperCase():el.value;if(field==='city'||field==='state')draft.area=areaForCity(draft.city,draft.state);applyNeeds();});
 // Tapping Done must not blur the field first: the blur's re-render would swallow the tap.
 document.addEventListener('pointerdown',event=>{if(event.target.closest('.section-done'))event.preventDefault();});
@@ -727,8 +764,8 @@ document.addEventListener('change', async event => {
   if (el.dataset.ownerAccess) { const b = bookings.find(item => item.id === el.dataset.ownerAccess); if (b) { b.draft.accessConfirmed = el.checked; if (b.pendingChange) b.pendingChange.draft.accessConfirmed = el.checked; persist(); } render(); announce(el.checked ? 'Access details confirmed for this job.' : 'Access marked as needing confirmation.'); return; }
   if (el.dataset.recent) { const id = el.dataset.recent, current = recentPick ?? propertyHistory(homeProperty() ?? PROPERTIES[0], bookings).services; recentPick = el.checked ? [...new Set([...current, id])] : current.filter(s => s !== id); render(); return; }
   if (el.dataset.homePick) { const id = el.dataset.homePick; homePick = el.checked ? [...homePick, id] : homePick.filter(s => s !== id); render(); return; }
-  if (el.dataset.service) { const id=el.dataset.service; confirmChoices('picked_services'); draft.services=el.checked?[...new Set([...draft.services,id])]:draft.services.filter(s=>s!==id);draft.start=null;error='';render();announce(`Price updated to ${money(quote(draft).total)}`);return; }
-  const field=el.dataset.field;if(!field)return;
+  if (el.dataset.service) { const id=el.dataset.service; if(!el.checked&&draft.services.length===1){el.checked=true;return;} confirmChoices('picked_services'); draft.services=el.checked?[...new Set([...draft.services,id])]:draft.services.filter(s=>s!==id);draft.start=null;error='';render();announce(`Price updated to ${money(quote(draft).total)}`);return; }
+  const field=el.dataset.field;if(!field||field==='zip')return;
   if(field==='repeatProperty'){repeatPropertyId=el.value;render();return;}
   if(field==='ownerDate'){ownerDate=el.value;render();return;}
   if(field==='moveDate'){dialog.date=el.value;dialog.start=null;error='';render();return;}
@@ -743,11 +780,13 @@ document.addEventListener('change', async event => {
   error='';render();
 });
 document.addEventListener('keydown', event => {
+  if (event.key === 'Enter' && event.target?.id === 'zip-input') { event.preventDefault(); document.querySelector('[data-action="zip-check"]')?.click(); return; }
+  if (event.key === 'Enter' && event.target?.id === 'waitlist-phone') { event.preventDefault(); document.querySelector('[data-action="waitlist"]')?.click(); return; }
   if(!dialog)return;
   if(event.key==='Escape'){dialog=null;error='';render();if(dialogReturnId)document.getElementById(dialogReturnId)?.focus({preventScroll:true});return;}
   if(event.key==='Tab'){
     const items=[...document.querySelectorAll('.dialog button:not(:disabled),.dialog input,.dialog select,.dialog textarea')];
-    const first=items[0],last=items.at(-1);
+    const first=items[0],last=items[items.length-1];
     if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
     else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
   }

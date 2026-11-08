@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {defaultDraft,quote,FALL_PROMO,LEGACY_PROMO,money,hoursStatus,hoursRange,easternNow,inFallPromo,fallPromoEnds} from '../model.js?v=combined-12';
-import {PROPERTIES,recentServices,recentDraft,sampleDay,repeatDraft} from '../operations.js?v=combined-12';
-import {getRules,publishRules,DEFAULT_RULES} from '../rules.js?v=combined-12';
-import * as w from '../workflow-model.js?v=combined-12';
+import {defaultDraft,quote,FALL_PROMO,LEGACY_PROMO,money,hoursStatus,hoursRange,easternNow,inFallPromo,fallPromoEnds} from '../model.js?v=v2-1';
+import {PROPERTIES,recentServices,recentDraft,sampleDay,repeatDraft} from '../operations.js?v=v2-1';
+import {getRules,publishRules,DEFAULT_RULES} from '../rules.js?v=v2-1';
+import * as w from '../workflow-model.js?v=v2-1';
 const legacy=()=>{const draft={...defaultDraft(),size:'small',propertyId:'mary-home'};delete draft.promotionSnapshot;return {id:'JHQ-LEGACY01',draft:{...draft,start:795},...quote(draft),status:'confirmed'};};
 
 test('combined November visits apply per-service discounts, one travel charge, and correct December prices',()=>{
@@ -60,7 +60,7 @@ test('opening status handles before, during, and after Thursday hours in Eastern
 });
 
 test('travel zone comes from the served city and state, and nothing else',async()=>{
- const {areaForCity}=await import('../model.js?v=combined-12');
+ const {areaForCity}=await import('../model.js?v=v2-1');
  assert.equal(areaForCity('Riverside','RI'),'riverside');assert.equal(areaForCity(' east providence ','ri'),'east');
  assert.equal(areaForCity('Riverside','MA'),'outside');assert.equal(areaForCity('Boston','RI'),'outside');assert.equal(areaForCity(),'outside');
 });

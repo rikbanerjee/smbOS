@@ -1,8 +1,8 @@
 // Template/event smoke checks in Node. These do not replace visual browser QA.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {defaultDraft,quote} from '../model.js?v=combined-12';
-import * as workflow from '../workflow-model.js?v=combined-12';
+import {defaultDraft,quote} from '../model.js?v=v2-1';
+import * as workflow from '../workflow-model.js?v=v2-1';
 let bootId=0;
 const RealDate=Date;
 const FULL={billingStreet:'1 Bill St',billingCity:'Boston',billingState:'MA',billingZip:'02101',billingAddress:'1 Bill St, Boston, MA 02101'};

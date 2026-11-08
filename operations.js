@@ -1,5 +1,6 @@
-import {DEFAULT_RULES} from './rules.js?v=combined-12';
-import { SERVICES, BUFFER, DEMO_DATES, defaultDraft, quote, slots, validBooking } from './model.js?v=combined-12';
+import {clone} from './compat.js?v=v2-1';
+import {DEFAULT_RULES} from './rules.js?v=v2-1';
+import { SERVICES, BUFFER, DEMO_DATES, defaultDraft, quote, slots, validBooking } from './model.js?v=v2-1';
 
 export const DEMO_CLOCK = 780; // Deliberate sample clock: 1 PM on the selected workday.
 export const PROPERTIES = [
@@ -25,7 +26,7 @@ export function propertyHistory(property, bookings = []) {
     .sort((a, b) => b.draft.date.localeCompare(a.draft.date));
   if (!completed.length) return property.lastVisit;
   const b = completed[0];
-  return { answers:structuredClone(b.draft.answers??{}),catalogSnapshot:structuredClone(b.draft.catalogSnapshot??DEFAULT_RULES),date: b.draft.date, services: [...b.draft.services], haul: b.draft.haul, size: b.draft.size, stories: b.draft.stories, minutes: b.actualMinutes ?? b.minutes, access: b.draft.access, parking: b.draft.parking, accessConfirmed: b.draft.accessConfirmed, property: b.draft.property, area: b.draft.area };
+  return { answers:clone(b.draft.answers??{}),catalogSnapshot:clone(b.draft.catalogSnapshot??DEFAULT_RULES),date: b.draft.date, services: [...b.draft.services], haul: b.draft.haul, size: b.draft.size, stories: b.draft.stories, minutes: b.actualMinutes ?? b.minutes, access: b.draft.access, parking: b.draft.parking, accessConfirmed: b.draft.accessConfirmed, property: b.draft.property, area: b.draft.area };
 }
 
 // Each service ordered for this property, most recent first: [{ id, date }].
@@ -42,7 +43,7 @@ export function recentServices(property, bookings = []) {
 export function repeatDraft(property, bookings = []) {
   const previous = propertyHistory(property, bookings);
   return {
-    ...defaultDraft(), answers:structuredClone(previous.answers??{}),services: [...previous.services], size: previous.size,
+    ...defaultDraft(), answers:clone(previous.answers??{}),services: [...previous.services], size: previous.size,
     haul: previous.haul, stories: previous.stories ?? property.stories, area: previous.area ?? property.area,
     property: previous.property ?? property.address, city: property.city, state: property.state, zip: property.zip, propertyId: property.id, parking: previous.parking ?? property.parking,
     access: previous.access ?? property.access, accessConfirmed: previous.accessConfirmed ?? property.accessConfirmed,
@@ -111,7 +112,7 @@ function fingerprint(b) {
 export function proposeRainPlan(bookings, date, blockedDates = []) {
   const affected = bookings.filter(b => b.status === 'confirmed' && b.draft.date === date)
     .sort((a, b) => a.draft.start - b.draft.start);
-  const working = structuredClone(bookings), proposals = [], unresolved = [];
+  const working = clone(bookings), proposals = [], unresolved = [];
   for (const original of affected) {
     if (original.pendingChange) { unresolved.push({ id: original.id, reason: 'Already awaiting customer confirmation' }); continue; }
     let proposal = null;
@@ -132,23 +133,23 @@ export function proposeRainPlan(bookings, date, blockedDates = []) {
 }
 
 export function approveRainPlan(bookings, plan, blockedDates = []) {
-  const working = structuredClone(bookings);
+  const working = clone(bookings);
   if (!plan.proposals.length) throw new Error('No proposed changes are ready to send.');
   for (const proposal of plan.proposals) {
     const b = working.find(b => b.id === proposal.id);
     if (!b || fingerprint(b) !== proposal.original) throw new Error('The calendar changed. Review a fresh rain plan.');
     if (validBooking(proposal.draft, working, b.id, blockedDates)) throw new Error('A proposed time is no longer available. Review a fresh rain plan.');
-    b.pendingChange = { status: 'awaiting_customer', reason: 'Rain delay', draft: structuredClone(proposal.draft), oldTotal: b.total, total: quote(proposal.draft).total };
+    b.pendingChange = { status: 'awaiting_customer', reason: 'Rain delay', draft: clone(proposal.draft), oldTotal: b.total, total: quote(proposal.draft).total };
     b.changeDeclined = false;
   }
   return working;
 }
 
 export function respondToRainChange(bookings, id, accept, blockedDates = []) {
-  const working = structuredClone(bookings), b = working.find(b => b.id === id);
+  const working = clone(bookings), b = working.find(b => b.id === id);
   if (!b || b.status !== 'confirmed' || b.pendingChange?.status !== 'awaiting_customer') throw new Error('This change request is no longer pending.');
   if (accept) {
-    const next = structuredClone(b.pendingChange.draft);
+    const next = clone(b.pendingChange.draft);
     const validation = validBooking(next, working, b.id, blockedDates);
     if (validation) throw new Error(validation);
     b.previousAppointments = [...(b.previousAppointments ?? []), { date: b.draft.date, start: b.draft.start, total: b.total, reason: b.pendingChange.reason==='Rain delay'?'Customer accepted rain change':'Customer accepted schedule change' }];

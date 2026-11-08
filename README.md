@@ -4,6 +4,23 @@ A static HTML/CSS/JavaScript sample for returning customers and a solo home-serv
 
 **Live site:** [rikbanerjee.github.io/smbOS](https://rikbanerjee.github.io/smbOS/)
 
+## prototype-v2: mobile fixes and customer flow (November 8, 2026)
+
+**Mobile reliability**
+- The app no longer stops at startup on iPhones before iOS 15.4. `structuredClone`, `crypto.randomUUID`, `.at()`, and `navigator.clipboard` are reached only through `compat.js`, which falls back on older browsers and on plain-http pages (for example a phone opening the dev server over Wi-Fi). `tests/compat.test.mjs` fails if app code calls them directly.
+- `index.html` shows a "Something went wrong · Reload" bar instead of a blank page if a script fails, and a short message on browsers without module support. Added a favicon.
+- Fonts are served from `fonts/` (DM Sans and Manrope variable woff2, SIL OFL 1.1, see `fonts/OFL.txt`) and preloaded, instead of a late Google Fonts `@import`. Stylesheets use three weights only (`--w-regular` 400, `--w-medium` 500, `--w-bold` 700) and `--font-body` / `--font-display`.
+
+**Customer flow**
+- One way in: Joe's storefront header, a **Does Joe come to you?** ZIP check, a one-line fall-pricing note (the cards keep their % off tags), then services and one Continue bar. Returning customers keep **Recently ordered → Book again**.
+- ZIP first: 02914 and 02916 are East Providence, 02915 is Riverside (`ZIP_AREAS` in `model.js`). Any other ZIP gets a friendly "Joe doesn't serve … yet" with a text-me-later option (saved to `business-hq-waitlist-v1`, nothing sent). The checked ZIP is kept in `business-hq-zip-v1`.
+- Booking a new address asks for ZIP and street only; city, state, and travel zone come from the ZIP. The price panel shows "Before travel" and "Pending" until there's a ZIP, never a red error or a dash.
+- Services chosen on the home page appear as a **Your visit** summary with **Change**, instead of a repeated locked step.
+- Demo controls moved off the customer page into the **Prototype tour** button in the top bar: book as a new customer, book again as Mary, run Joe's working day, set up Joe's business. The sidebar taglines, "Customer demo" header tag, and in-page demo links are gone.
+- New styles are in `v2.css`. Asset URLs use `v2-1`.
+
+Not changed yet: owner Truck mode, the design system, and the immersive demo pieces (see the change plan in the smbOS project). The scoped `!important` rules in the stylesheets are left for the design-system pass.
+
 ## Combined customer and owner release
 
 Derek's November 1 customer-home package is now integrated on top of the landscaper field desk. See [integration details](docs/customer-zip-integration.md) for the source package and conflict resolutions.
@@ -106,7 +123,7 @@ Tests additionally cover field progression, phone bookings, completion/stock con
 
 ## Hosting
 
-GitHub Pages source: **main / repository root**. Keep `index.html`, `styles.css`, `app.js`, `model.js`, `operations.js`, `experience.js`, `rules.js`, `workflow-model.js`, and `workflow-ui.js`, `calendar.js`, `readability.css`, `owner-model.js`, `owner-hq.js`, and `owner.css` together. `.nojekyll` disables Jekyll processing. Pushing to `main` publishes the static site through GitHub Pages.
+GitHub Pages source: **main / repository root**. Keep `index.html`, `compat.js`, `v2.css`, the `fonts/` folder, `styles.css`, `app.js`, `model.js`, `operations.js`, `experience.js`, `rules.js`, `workflow-model.js`, and `workflow-ui.js`, `calendar.js`, `readability.css`, `owner-model.js`, `owner-hq.js`, and `owner.css` together. `.nojekyll` disables Jekyll processing. Pushing to `main` publishes the static site through GitHub Pages.
 
 ## Demo limits
 

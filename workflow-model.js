@@ -1,8 +1,9 @@
-import {getRules} from './rules.js?v=combined-12';
-import {quote, slots, validBooking, freshPromotion, DEMO_DATES, BUFFER} from './model.js?v=combined-12';
+import {clone as deepClone,uuid} from './compat.js?v=v2-1';
+import {getRules} from './rules.js?v=v2-1';
+import {quote, slots, validBooking, freshPromotion, DEMO_DATES, BUFFER} from './model.js?v=v2-1';
 export const freshWork=()=>({quotes:[],extras:[],invoices:[],plans:[],seasonal:[]});
-export const uid=prefix=>`${prefix}-${crypto.randomUUID().slice(0,8).toUpperCase()}`;
-const clone=x=>structuredClone(x);
+export const uid=prefix=>`${prefix}-${uuid().slice(0,8).toUpperCase()}`;
+const clone=deepClone;
 const amount=(n,zero=false)=>{if(!Number.isFinite(n)||n<(zero?0:0.01)||n>100000)throw Error('Enter an amount between '+(zero?'0':'0.01')+' and 100,000.');return Math.round(n*100)/100;};
 export function invoiceFor(work,b) {
   let invoice=work.invoices.find(i=>i.bookingId===b.id);

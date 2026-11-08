@@ -1,6 +1,7 @@
-import {SERVICES,DEMO_DATES,defaultDraft,quote,slots,validBooking} from './model.js?v=combined-12';
-import {packingList} from './operations.js?v=combined-12';
-import {finishJob,balance} from './workflow-model.js?v=combined-12';
+import {clone as deepClone,uuid} from './compat.js?v=v2-1';
+import {SERVICES,DEMO_DATES,defaultDraft,quote,slots,validBooking} from './model.js?v=v2-1';
+import {packingList} from './operations.js?v=v2-1';
+import {finishJob,balance} from './workflow-model.js?v=v2-1';
 
 export const OWNER_STORE='business-hq-field-desk-v1';
 export const freshDesk=()=>({jobs:{},propertyNotes:{},unavailable:[],stock:{'Leaf bags':24}});
@@ -10,7 +11,7 @@ export function loadDesk(value){
   d.unavailable=Array.isArray(value.unavailable)?value.unavailable.filter(x=>typeof x==='string'):[];
   return d;
 }
-const clone=x=>structuredClone(x);
+const clone=deepClone;
 export const propertyKey=b=>b.draft.propertyId||b.draft.property.trim().toLowerCase();
 export function recordFor(desk,id){return desk.jobs[id]??{tasks:{},note:'',photos:[],events:[]};}
 export function saveRecord(desk,id,patch){const next=clone(desk);next.jobs[id]={...recordFor(next,id),...patch};return next;}
@@ -77,7 +78,7 @@ export function addPhoneJob(bookings,draft,confirmed,blocked=[]){
   const d=clone({...draft,ownerCreated:true}),q=quote(d);
   const error=validBooking(d,bookings,null,blocked);if(error)throw Error(error);
   if(q.minutes+30>240)throw Error('This job needs a reviewed scope that fits the workday.');
-  return {id:'JHQ-'+crypto.randomUUID().replaceAll('-','').slice(0,8).toUpperCase(),draft:d,...q,status:'confirmed',source:'phone'};
+  return {id:'JHQ-'+uuid().replaceAll('-','').slice(0,8).toUpperCase(),draft:d,...q,status:'confirmed',source:'phone'};
 }
 export function newPhoneDraft(date){return {...defaultDraft(),ownerCreated:true,name:'',phone:'',email:'',property:'',notes:'',access:'',accessConfirmed:false,size:'small',date:DEMO_DATES.includes(date)?date:DEMO_DATES[0]};}
 export function proposeAppointment(bookings,id,date,start,blocked=[]){

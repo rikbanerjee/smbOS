@@ -1,3 +1,4 @@
+import {clone} from './compat.js?v=v2-1';
 // Service rules are snapshotted into each agreed visit; publishing never rewrites old jobs.
 export const DEFAULT_RULES = {
   leaves: { base:150, minutes:90, mode:'instant', questions:[
@@ -8,9 +9,9 @@ export const DEFAULT_RULES = {
   sprinklers: {base:85,minutes:60,mode:'instant',questions:[{key:'zones',label:'How many sprinkler zones?',type:'select',required:true,default:'up to 6',options:['up to 6','7 or more'],when:'',equals:'7 or more',price:0,minutes:0,prep:'Confirm system capacity',review:true}]},
   mowing: {base:40,minutes:45,mode:'instant',questions:[{key:'overgrown',label:'Is the lawn unusually overgrown?',type:'select',required:true,default:'no',options:['no','yes'],when:'',equals:'yes',price:20,minutes:15,prep:'Heavy-duty trimmer'}]}
 };
-let published = structuredClone(DEFAULT_RULES);
-export const getRules = () => structuredClone(published);
-export function publishRules(config) { validateRules(config); published=structuredClone(config); }
+let published = clone(DEFAULT_RULES);
+export const getRules = () => clone(published);
+export function publishRules(config) { validateRules(config); published=clone(config); }
 export function validateRules(config) {
   for (const [id,s] of Object.entries(DEFAULT_RULES)) {
     const c=config[id]; if(!c || !Number.isFinite(c.base) || c.base<0 || !Number.isInteger(c.minutes) || c.minutes<15 || c.minutes>600 || !['instant','quote'].includes(c.mode) || !Array.isArray(c.questions)) throw Error('Use a non-negative price and 15–600 whole minutes for each service.');

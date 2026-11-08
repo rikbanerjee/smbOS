@@ -1,5 +1,5 @@
-import { AREAS, BUFFER, SERVICES, DEMO_DATES, hoursFor, hoursRange, quote, money, time, duration, dateLabel } from './model.js?v=combined-12';
-import { PROPERTIES, DEMO_CLOCK, propertyHistory, repeatDraft, dayPlan, readiness } from './operations.js?v=combined-12';
+import { AREAS, BUFFER, SERVICES, DEMO_DATES, hoursFor, hoursRange, quote, money, time, duration, dateLabel } from './model.js?v=v2-1';
+import { PROPERTIES, DEMO_CLOCK, propertyHistory, repeatDraft, dayPlan, readiness } from './operations.js?v=v2-1';
 
 export function repeatExperience({ bookings, propertyId, icon, esc }) {
   const saved = PROPERTIES.find(p => p.id === propertyId) ?? PROPERTIES[0];
